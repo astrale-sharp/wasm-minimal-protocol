@@ -1,5 +1,5 @@
 use wasm_minimal_protocol::*;
-declare_protocol!();
+initiate_protocol!();
 
 #[wasm_func]
 pub fn hello() -> String {
@@ -8,12 +8,12 @@ pub fn hello() -> String {
 
 #[wasm_func]
 pub fn double_it(arg: String) -> String {
-    format!("{}{}", arg, arg)
+    format!("{}.{}", arg, arg)
 }
 
 #[wasm_func]
 pub fn concatenate(arg1: String, arg2: String) -> String {
-    format!("{}--{}", arg1, arg2)
+    format!("{}*{}", arg1, arg2)
 }
 
 #[wasm_func]
