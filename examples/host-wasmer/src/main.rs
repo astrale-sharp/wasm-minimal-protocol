@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         &instance,
         &mut store,
         concatenate_fn,
-        vec![String::from("value1"), String::from("value2")],
+        vec![String::from("val1"), String::from("value2")],
     );
     println!("{:?}", read(&instance, read_at, &mut store));
 
@@ -89,12 +89,10 @@ fn call(instance: &Instance, store: &mut Store, function: &Function, params: Vec
                 fold += k.len();
                 v.push(fold as i32);
             }
-            v.pop();
             v
         };
         p = params
     };
-
     //clear
     let _ = instance
         .exports
@@ -104,8 +102,8 @@ fn call(instance: &Instance, store: &mut Store, function: &Function, params: Vec
         .unwrap();
     //
     write(instance, store, params.join("").as_bytes());
-    let _ = function.call(
+    function.call(
         store,
         p.into_iter().map(Value::I32).collect::<Vec<_>>().as_slice(),
-    );
+    ).unwrap();
 }

@@ -1,10 +1,16 @@
+/// Minimal protocol for sending/receiving string from and to wasm
+/// if you define a function accepting n strings,
+/// it will be exposed as a function accepting n integers.
+///
+/// The last integer will be ignored, the rest will be used to split a
+/// concatenated string of the args sent by the host
 use proc_macro::TokenStream;
-
 use quote::{format_ident, quote, ToTokens};
 use venial::*;
 
 #[proc_macro]
-pub fn declare_protocol(_: TokenStream) -> TokenStream {
+/// Must be called once.
+pub fn initiate_protocol(_: TokenStream) -> TokenStream {
     quote!(
         #[no_mangle]
         static mut RESULT: Vec<u8> = Vec::new();
@@ -52,10 +58,10 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         ),
         _ => (),
     }
-    let mut p = params
+    let p = params
         .items()
         .map(|x| match x {
-            FnParam::Receiver(p) => {
+            FnParam::Receiver(_p) => {
                 panic!("args receiving self like {x:?} are not allowed in the protocol")
             }
             FnParam::Typed(p) => {
@@ -66,40 +72,58 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
             }
         })
         .collect::<Vec<_>>();
-    let mut get_unsplit_params = quote!();
+    let mut get_unsplit_params = quote!(
+        let unsplit_params = unsafe {String::from_utf8(RESULT.clone())}.unwrap();
+    );
     let mut set_args = quote!(
         let start: usize = 0;
     );
-    // create a func with p.len - 1 args
-    if p.len() > 1 {
-        let last = p.pop().unwrap();
-        get_unsplit_params = quote!(
-            let unsplit_params = unsafe {String::from_utf8(RESULT.clone())}.unwrap();
-        );
-        for (idx, param_name) in p.iter().cloned().enumerate() {
-            let param_name_idx = format_ident!("{}_idx", &param_name);
+    match p.len() {
+        0 => {
+            get_unsplit_params = quote!();
+        }
+        1 => {
+            let arg = p.first().unwrap();
             set_args = quote!(
-                #set_args
-                let end : usize= #param_name_idx as _;
-                let #param_name = &unsplit_params[start..end]; // slice it according to index and the index received arg1 etc
-                let start : usize = end;
+                let #arg = unsplit_params;
             )
         }
-        set_args = quote!(
-            #set_args
-            let #last = &unsplit_params[end..];
-        )
-
-        // if len == 1 should just get the arg
-    } else if p.len() == 1 {
-        let last = p.pop().unwrap();
-        set_args = quote!(
-            let #last = unsafe {String::from_utf8(RESULT.clone())}.unwrap();
-        );
+        2.. => {
+            // ignore last arg, rest used to split unsplit_param
+            let args = &p;
+            let mut args_idx = p
+                .iter()
+                .map(|name| format_ident!("{}_idx", &name))
+                .collect::<Vec<_>>();
+            args_idx.pop();
+            let mut sets = vec![];
+            for (idx, arg_idx) in args_idx.iter().enumerate() {
+                let arg_name = &args[idx];
+                sets.push(quote!(
+                    end = #arg_idx as _;
+                    let #arg_name = &unsplit_params[start..end];
+                    start = end;
+                ))
+            }
+            let last = args.last().unwrap();
+            sets.push(quote!(
+                let #last =  &unsplit_params[end..];
+            ));
+            set_args = quote!(
+                let mut start : usize = 0;
+                let mut end : usize = 0;
+                #(
+                    #sets
+                )*
+            );
+        }
+        _ => unreachable!(),
     }
-    let p = p.iter().map(|name|format_ident!("{}_idx", name));
+
+    let p = p.iter().map(|name| format_ident!("{}_idx", name));
     quote!(
         #[no_mangle]
+        #[allow(unused_variables)]
         pub fn #name( #(#p : u32),* ) {
             #get_unsplit_params
             #set_args
