@@ -2,108 +2,105 @@
 // you need to build the hello example first
 
 use anyhow::Result;
-use wasmer::{imports, Function, Instance, IntoBytes, Module, Store, Value};
+use wasmer::{imports, Instance, Module, Store, Value};
+
 fn main() -> Result<()> {
     let mut store = Store::default();
-    let module = Module::new(&store, include_bytes!("../../hello.wasm"))?; // this is just compiled with the hello example
+    let module = Module::new(
+        &store,
+        include_bytes!("../../hello/target/wasm32-unknown-unknown/debug/hello.wasm"),
+    )?; // this is just compiled with the hello example
     let import_object = imports! {};
     let instance = Instance::new(&mut store, &module, &import_object)?;
 
-    let read_at = instance.exports.get_function("read_at").unwrap();
-    let hello_fn = instance.exports.get_function("hello").unwrap();
-    let double_it = instance.exports.get_function("double_it").unwrap();
-    let concatenate_fn = instance.exports.get_function("concatenate").unwrap();
-    let shuffle = instance.exports.get_function("shuffle").unwrap();
+    let mut plugin_instance = PluginInstance::new(&instance, &mut store);
 
-    call(&instance, &mut store, hello_fn, vec![]);
-    println!("{:?}", read(&instance, read_at, &mut store));
-
-    call(&instance, &mut store, double_it, vec!["double me!!".into()]);
-    println!("{:?}", read(&instance, read_at, &mut store));
-
-    call(
-        &instance,
-        &mut store,
-        concatenate_fn,
-        vec![String::from("val1"), String::from("value2")],
+    println!("{:?}", plugin_instance.call("hello", &[]));
+    println!("{:?}", plugin_instance.call("double_it", &["double me!!"]));
+    println!(
+        "{:?}",
+        plugin_instance.call("concatenate", &["val1", "value2"])
     );
-    println!("{:?}", read(&instance, read_at, &mut store));
-
-    call(
-        &instance,
-        &mut store,
-        shuffle,
-        vec![
-            String::from("value1"),
-            String::from("value2"),
-            String::from("value3"),
-        ],
+    println!(
+        "{:?}",
+        plugin_instance.call("shuffle", &["value1", "value2", "value3"])
     );
-    println!("{:?}", read(&instance, read_at, &mut store));
 
     Ok(())
 }
 
-fn write(instance: &Instance, store: &mut Store, to_write: impl IntoBytes) {
-    instance
-        .exports
-        .get_function("clear")
-        .unwrap()
-        .call(store, &[])
-        .unwrap();
-    let push = instance.exports.get_function("push").unwrap();
-    for b in to_write.into_bytes() {
-        push.call(store, &[Value::I32(b as _)]).unwrap();
-    }
+struct PluginInstance<'a> {
+    instance: &'a Instance,
+    store: &'a mut Store,
+    allocate_storage: &'a wasmer::Function,
+    get_storage_pointer: &'a wasmer::Function,
+    get_storage_len: &'a wasmer::Function,
+    memory: &'a wasmer::Memory,
 }
 
-fn read(instance: &Instance, read_at: &wasmer::Function, store: &mut Store) -> String {
-    let len = instance
-        .exports
-        .get_function("get_len")
-        .unwrap()
-        .call(store, &[])
-        .unwrap()[0]
-        .i32()
-        .unwrap();
-    let mut res: Vec<u8> = vec![];
-    for k in 0..len {
-        let b = read_at.call(store, &[Value::I32(k)]).unwrap()[0]
-            .i32()
+impl<'a> PluginInstance<'a> {
+    fn new(instance: &'a Instance, store: &'a mut Store) -> Self {
+        // important functions that we will often use.
+        let allocate_storage = instance
+            .exports
+            .get_function("wasm_minimal_protocol::allocate_storage")
             .unwrap();
-        res.push(b as _)
+        let get_storage_pointer = instance
+            .exports
+            .get_function("wasm_minimal_protocol::get_storage_pointer")
+            .unwrap();
+        let get_storage_len = instance
+            .exports
+            .get_function("wasm_minimal_protocol::get_storage_len")
+            .unwrap();
+        let memory = instance.exports.get_memory("memory").unwrap();
+        Self {
+            instance,
+            store,
+            allocate_storage,
+            get_storage_pointer,
+            get_storage_len,
+            memory,
+        }
     }
-    String::from_utf8(res).expect("not a string")
-}
 
-fn call(instance: &Instance, store: &mut Store, function: &Function, params: Vec<String>) {
-    let ty = function.ty(&store);
-    // the protocol states the function takes argument to cut the result vec
-    let mut p = vec![];
-    if !ty.params().is_empty() {
-        write(instance, store, params.join("").as_bytes());
-        let params = {
-            let mut v = vec![];
-            let mut fold = 0;
-            for k in params.iter() {
-                fold += k.len();
-                v.push(fold as i32);
-            }
-            v
-        };
-        p = params
-    };
-    //clear
-    let _ = instance
-        .exports
-        .get_function("clear")
-        .unwrap()
-        .call(store, &[])
-        .unwrap();
-    //
-    write(instance, store, params.join("").as_bytes());
-    function.call(
-        store,
-        p.into_iter().map(Value::I32).collect::<Vec<_>>().as_slice(),
-    ).unwrap();
+    /// Write arguments in `__RESULT`.
+    fn write(&mut self, args: &[&str]) {
+        let total_len = args.iter().map(|a| a.len()).sum::<usize>();
+        self.allocate_storage
+            .call(self.store, &[Value::I32(total_len as _)])
+            .unwrap();
+        let mut storage_pointer =
+            self.get_storage_pointer.call(self.store, &[]).unwrap()[0].unwrap_i32() as u64;
+        for arg in args {
+            self.memory
+                .view(self.store)
+                .write(storage_pointer, arg.as_bytes())
+                .unwrap();
+            storage_pointer += arg.len() as u64;
+        }
+    }
+
+    fn call(&mut self, function: &str, args: &[&str]) -> String {
+        self.write(args);
+        let args = args
+            .iter()
+            .map(|a| Value::I32(a.len() as _))
+            .collect::<Vec<_>>();
+
+        let function = self.instance.exports.get_function(function).unwrap();
+        function.call(self.store, &args).unwrap();
+
+        // Get the resulting string in `__RESULT`
+        let storage_pointer =
+            self.get_storage_pointer.call(self.store, &[]).unwrap()[0].unwrap_i32() as u64;
+        let len = self.get_storage_len.call(self.store, &[]).unwrap()[0].unwrap_i32();
+
+        let mut result = vec![0u8; len as usize];
+        self.memory
+            .view(self.store)
+            .read(storage_pointer, &mut result)
+            .unwrap();
+        String::from_utf8(result).unwrap()
+    }
 }

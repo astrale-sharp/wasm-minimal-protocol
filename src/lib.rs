@@ -1,5 +1,5 @@
 /// Minimal protocol for sending/receiving string from and to wasm
-/// if you define a function accepting n strings,
+/// if you define a function accepting n &str,
 /// it will be exposed as a function accepting n integers.
 ///
 /// The last integer will be ignored, the rest will be used to split a
@@ -12,27 +12,40 @@ use venial::*;
 /// Must be called once.
 pub fn initiate_protocol(_: TokenStream) -> TokenStream {
     quote!(
-        #[no_mangle]
-        static mut RESULT: Vec<u8> = Vec::new();
-
-        #[no_mangle]
-        pub fn read_at(at: i32) -> u8 {
-            unsafe { RESULT[at as usize] as _ }
+        thread_local! {
+            #[no_mangle]
+            pub static __RESULT: ::std::cell::Cell<Vec<u8>> = ::std::cell::Cell::new(Vec::new());
         }
 
         #[no_mangle]
-        pub fn get_len() -> usize {
-            unsafe { RESULT.len() as _ }
+        #[export_name = "wasm_minimal_protocol::get_storage_pointer"]
+        pub extern "C" fn __wasm_minimal_protocol_internal_function_get_storage_pointer() -> *mut u8
+        {
+            __RESULT.with(|result| {
+                let mut temp = result.replace(Vec::new());
+                let ptr = temp.as_mut_ptr();
+                result.replace(temp);
+                ptr
+            })
         }
 
         #[no_mangle]
-        pub fn clear() {
-            unsafe { RESULT.clear() }
+        #[export_name = "wasm_minimal_protocol::allocate_storage"]
+        pub extern "C" fn __wasm_minimal_protocol_internal_function_allocate_storage(
+            length: usize,
+        ) {
+            __RESULT.with(|x| x.replace(vec![0; length]));
         }
 
         #[no_mangle]
-        pub fn push(chunk: u8) {
-            unsafe { RESULT.push(chunk) }
+        #[export_name = "wasm_minimal_protocol::get_storage_len"]
+        pub extern "C" fn __wasm_minimal_protocol_internal_function_get_storage_len() -> usize {
+            __RESULT.with(|result| {
+                let temp = result.replace(Vec::new());
+                let len = temp.len();
+                result.replace(temp);
+                len
+            })
         }
     )
     .into()
@@ -47,7 +60,11 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         .expect("wasm function proc macro can only be applied to a function")
         .clone();
     let Function {
-        name, body, params, ..
+        name,
+        body,
+        params,
+        vis_marker,
+        ..
     } = func;
     //TODO
     match func.return_ty {
@@ -65,74 +82,83 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 panic!("args receiving self like {x:?} are not allowed in the protocol")
             }
             FnParam::Typed(p) => {
-                if p.ty.to_token_stream().to_string() != "String" {
-                    panic!("only parameter of type string are allowed, not {:?}", p.ty)
+                let p_to_string = p.ty.to_token_stream().to_string();
+                if p.ty.tokens.len() != 2
+                    || p.ty.tokens[0].to_string() != "&"
+                    || p.ty.tokens[1].to_string() != "str"
+                {
+                    panic!("only parameter of type &str are allowed, not {p_to_string}")
                 }
                 p.name.clone()
             }
         })
         .collect::<Vec<_>>();
     let mut get_unsplit_params = quote!(
-        let unsplit_params = unsafe {String::from_utf8(RESULT.clone())}.unwrap();
+        let __result = __RESULT.with(|x| {
+            x.replace(Vec::new())
+        });
+        let __unsplit_params = {
+            ::std::str::from_utf8(__result.as_slice()) }.unwrap();
     );
     let mut set_args = quote!(
         let start: usize = 0;
     );
     match p.len() {
-        0 => {
-            get_unsplit_params = quote!();
-        }
+        0 => get_unsplit_params = quote!(),
         1 => {
             let arg = p.first().unwrap();
             set_args = quote!(
-                let #arg = unsplit_params;
+                let #arg: &str = __unsplit_params;
             )
         }
-        2.. => {
+        _ => {
             // ignore last arg, rest used to split unsplit_param
             let args = &p;
             let mut args_idx = p
                 .iter()
-                .map(|name| format_ident!("{}_idx", &name))
+                .map(|name| format_ident!("__{}_idx", &name))
                 .collect::<Vec<_>>();
             args_idx.pop();
             let mut sets = vec![];
+            let mut start = quote!(0usize);
+            let mut end = quote!(0usize);
             for (idx, arg_idx) in args_idx.iter().enumerate() {
+                end = quote!(#end + #arg_idx);
                 let arg_name = &args[idx];
                 sets.push(quote!(
-                    end = #arg_idx as _;
-                    let #arg_name = &unsplit_params[start..end];
-                    start = end;
-                ))
+                    let #arg_name: &str = &__unsplit_params[#start..#end];
+                ));
+                start = quote!(#start + #arg_idx)
             }
             let last = args.last().unwrap();
             sets.push(quote!(
-                let #last =  &unsplit_params[end..];
+                let #last = &__unsplit_params[#end..];
             ));
             set_args = quote!(
-                let mut start : usize = 0;
-                let mut end : usize = 0;
                 #(
                     #sets
                 )*
             );
         }
-        _ => unreachable!(),
     }
 
-    let p = p.iter().map(|name| format_ident!("{}_idx", name));
+    let p_idx = p.iter().map(|name| format_ident!("__{}_idx", name));
+    let inner_name = format_ident!("__wasm_minimal_protocol_internal_function_{}", name);
+    let export_name = proc_macro2::Literal::string(&name.to_string());
     quote!(
-        #[no_mangle]
-        #[allow(unused_variables)]
-        pub fn #name( #(#p : u32),* ) {
-            #get_unsplit_params
-            #set_args
-            // get args here
-            unsafe {
-                RESULT = {
-                    #body
-                }.as_bytes().to_vec();
+        #vis_marker fn #name(#(#p: &str),*) -> String {
+            #[no_mangle]
+            #[export_name = #export_name]
+            pub extern "C" fn #inner_name( #(#p_idx : usize),* ) {
+                #get_unsplit_params
+                #set_args
+                // get args here
+
+            __RESULT.with(|x| x.replace(#name(#(#p),*).into_bytes()));
+
             }
+
+            #body
         }
     )
     .into()
