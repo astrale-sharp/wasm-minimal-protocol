@@ -465,7 +465,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "host"
+name = "host-wasmer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
