@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
-wasmer = { version = "3.3.0", default-features = false, features = ["sys","wat","cranelift"]}
+wasmer = { version = "3.3.0", default-features = false, features = ["sys","cranelift"]}

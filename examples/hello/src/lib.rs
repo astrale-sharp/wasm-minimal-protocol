@@ -7,16 +7,16 @@ pub fn hello() -> String {
 }
 
 #[wasm_func]
-pub fn double_it(arg: String) -> String {
+pub fn double_it(arg: &str) -> String {
     format!("{}.{}", arg, arg)
 }
 
 #[wasm_func]
-pub fn concatenate(arg1: String, arg2: String) -> String {
+pub fn concatenate(arg1: &str, arg2: &str) -> String {
     format!("{}*{}", arg1, arg2)
 }
 
 #[wasm_func]
-pub fn shuffle(arg1: String, arg2: String, arg3: String) -> String {
+pub fn shuffle(arg1: &str, arg2: &str, arg3: &str) -> String {
     format!("{}-{}-{}", arg3, arg1, arg2)
 }
