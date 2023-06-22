@@ -7,4 +7,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
-wasmer = { version = "3.3.0", default-features = false, features = ["sys","cranelift"]}
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmer = { version = "3.3.0", default-features = false, features = [
+    "cranelift",
+] }
