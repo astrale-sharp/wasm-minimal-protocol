@@ -8,7 +8,7 @@ fn main() -> Result<()> {
     let mut store = Store::default();
     let module = Module::new(
         &store,
-        include_bytes!("../../hello/target/wasm32-unknown-unknown/debug/hello.wasm"),
+        include_bytes!("../../../target/wasm32-unknown-unknown/debug/hello.wasm"),
     )?; // this is just compiled with the hello example
     let import_object = imports! {};
     let instance = Instance::new(&mut store, &module, &import_object)?;
