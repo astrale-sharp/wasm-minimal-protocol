@@ -1,4 +1,5 @@
 use wasm_minimal_protocol::*;
+
 initiate_protocol!();
 
 #[wasm_func]
