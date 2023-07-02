@@ -1,0 +1,1 @@
+cargo build -p hello --target wasm32-unknown-unknown && cargo run -p host-wasmer
