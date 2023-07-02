@@ -43,15 +43,15 @@ impl<'a> PluginInstance<'a> {
         // important functions that we will often use.
         let allocate_storage = instance
             .exports
-            .get_function("wasm_minimal_protocol::allocate_storage")
+            .get_function("wasm_minimal_protocol_allocate_storage")
             .unwrap();
         let get_storage_pointer = instance
             .exports
-            .get_function("wasm_minimal_protocol::get_storage_pointer")
+            .get_function("wasm_minimal_protocol_get_storage_pointer")
             .unwrap();
         let get_storage_len = instance
             .exports
-            .get_function("wasm_minimal_protocol::get_storage_len")
+            .get_function("wasm_minimal_protocol_get_storage_len")
             .unwrap();
         let memory = instance.exports.get_memory("memory").unwrap();
         Self {

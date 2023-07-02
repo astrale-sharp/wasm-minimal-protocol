@@ -10,42 +10,32 @@ use venial::*;
 
 #[proc_macro]
 /// Must be called once.
+///
+/// Why not a simple static ? why not a thread_local and/or a cell? why no defense against data race ?
+///
+/// The plugin will never be aware if it is being sent in a thread and hence always single threaded, it's the host that needs to make sure to be Send and Sync.
+///
+/// It's also wanted that the implementation is simple and easy to read so that it can be adapted to C or C++ easily.
 pub fn initiate_protocol(_: TokenStream) -> TokenStream {
     quote!(
-        thread_local! {
-            #[no_mangle]
-            pub static __RESULT: ::std::cell::Cell<Vec<u8>> = ::std::cell::Cell::new(Vec::new());
-        }
+        static mut __RESULT: Vec<u8> = Vec::new();
 
-        #[no_mangle]
-        #[export_name = "wasm_minimal_protocol::get_storage_pointer"]
+        #[export_name = "wasm_minimal_protocol_get_storage_pointer"]
         pub extern "C" fn __wasm_minimal_protocol_internal_function_get_storage_pointer() -> *mut u8
         {
-            __RESULT.with(|result| {
-                let mut temp = result.replace(Vec::new());
-                let ptr = temp.as_mut_ptr();
-                result.replace(temp);
-                ptr
-            })
+            unsafe { __RESULT.as_mut_ptr() }
         }
 
-        #[no_mangle]
-        #[export_name = "wasm_minimal_protocol::allocate_storage"]
+        #[export_name = "wasm_minimal_protocol_allocate_storage"]
         pub extern "C" fn __wasm_minimal_protocol_internal_function_allocate_storage(
             length: usize,
         ) {
-            __RESULT.with(|x| x.replace(vec![0; length]));
+            unsafe { __RESULT.resize(length, 0) };
         }
 
-        #[no_mangle]
-        #[export_name = "wasm_minimal_protocol::get_storage_len"]
+        #[export_name = "wasm_minimal_protocol_get_storage_len"]
         pub extern "C" fn __wasm_minimal_protocol_internal_function_get_storage_len() -> usize {
-            __RESULT.with(|result| {
-                let temp = result.replace(Vec::new());
-                let len = temp.len();
-                result.replace(temp);
-                len
-            })
+            unsafe { __RESULT.len() }
         }
     )
     .into()
@@ -61,12 +51,11 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         .clone();
     let Function {
         name,
-        body,
         params,
         vis_marker,
         ..
-    } = func;
-    //TODO
+    } = func.clone();
+
     match func.return_ty {
         Some(ty) if ty.to_token_stream().to_string() != "String" => panic!(
             "The protocol specifies your function can only return a {}, you tried to return {} ",
@@ -94,11 +83,8 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
     let mut get_unsplit_params = quote!(
-        let __result = __RESULT.with(|x| {
-            x.replace(Vec::new())
-        });
         let __unsplit_params = {
-            ::std::str::from_utf8(__result.as_slice()) }.unwrap();
+            ::std::str::from_utf8( unsafe { __RESULT.as_slice() } ) }.unwrap();
     );
     let mut set_args = quote!(
         let start: usize = 0;
@@ -146,19 +132,16 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
     let inner_name = format_ident!("__wasm_minimal_protocol_internal_function_{}", name);
     let export_name = proc_macro2::Literal::string(&name.to_string());
     quote!(
-        #vis_marker fn #name(#(#p: &str),*) -> String {
-            #[no_mangle]
-            #[export_name = #export_name]
-            pub extern "C" fn #inner_name( #(#p_idx : usize),* ) {
+        #func
+
+        #[export_name = #export_name]
+        #vis_marker fn #inner_name(#(#p_idx: usize),*) -> usize {
                 #get_unsplit_params
                 #set_args
-                // get args here
 
-            __RESULT.with(|x| x.replace(#name(#(#p),*).into_bytes()));
+                unsafe { __RESULT = #name(#(#p),*).into_bytes() }
+                0 // indicates everything was successful
 
-            }
-
-            #body
         }
     )
     .into()
