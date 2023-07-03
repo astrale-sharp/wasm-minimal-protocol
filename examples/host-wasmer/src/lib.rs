@@ -80,7 +80,7 @@ impl PluginInstance {
         }
     }
 
-    fn store(&self) -> Result<std::sync::MutexGuard<'_, wasmer::Store>, String> {
+    pub fn store(&self) -> Result<std::sync::MutexGuard<'_, wasmer::Store>, String> {
         self.store
             .lock()
             .map_err(|_| "Couldn't lock the plugin store".into())
