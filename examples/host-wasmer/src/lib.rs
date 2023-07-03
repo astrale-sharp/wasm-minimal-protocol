@@ -86,7 +86,7 @@ impl PluginInstance {
             .map_err(|_| "Couldn't lock the plugin store".into())
     }
 
-    fn memory(&self) -> Result<std::sync::MutexGuard<'_, wasmer::Memory>, String> {
+    pub fn memory(&self) -> Result<std::sync::MutexGuard<'_, wasmer::Memory>, String> {
         self.memory
             .lock()
             .map_err(|_| "Couldn't lock the plugin memory".into())
@@ -165,4 +165,8 @@ impl PluginInstance {
         Some(function.clone())
         //Some(function.clone())
     }
+}
+
+pub fn string_to_wasmer_len<'a>(s : impl Into<&'a str>) -> wasmer::Value {
+    wasmer::Value::I32(s.into().len() as _)
 }
