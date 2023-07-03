@@ -93,7 +93,7 @@ impl PluginInstance {
     }
 
     /// Write arguments in `__RESULT`.
-    fn write(&mut self, args: &[&str]) -> Result<(), String> {
+    pub fn write(&mut self, args: &[&str]) -> Result<(), String> {
         let total_len = args.iter().map(|a| a.len()).sum::<usize>();
         self.allocate_storage
             .call(&mut self.store()?, &[wasmer::Value::I32(total_len as _)])
@@ -154,5 +154,9 @@ impl PluginInstance {
         } else {
             s
         }
+    }
+
+    pub fn has_function(&self, method: &str) -> bool {
+        self.functions.iter().any(|(s, _)| s == method)
     }
 }
