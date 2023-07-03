@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use wasmer::{Instance, Memory, Store, Value};
 
+#[derive(Debug)]
 pub struct PluginInstance {
     store: Arc<Mutex<Store>>,
     memory: Arc<Mutex<Memory>>,
