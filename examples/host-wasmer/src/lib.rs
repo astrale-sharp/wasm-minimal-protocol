@@ -1,10 +1,9 @@
-use std::sync::{Arc, Mutex};
 use wasmer::{Instance, Memory, Store, Value};
 
 #[derive(Debug)]
 pub struct PluginInstance {
-    store: Arc<Mutex<Store>>,
-    memory: Arc<Mutex<Memory>>,
+    store: Store,
+    memory: Memory,
     allocate_storage: wasmer::Function,
     get_storage_pointer: wasmer::Function,
     get_storage_len: wasmer::Function,
@@ -13,15 +12,10 @@ pub struct PluginInstance {
 
 impl std::hash::Hash for PluginInstance {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let len = self
-            .memory()
-            .unwrap()
-            .view(&self.store().unwrap())
-            .data_size();
+        let len = self.memory.view(&self.store).data_size();
         for k in 0..len {
-            self.memory()
-                .unwrap()
-                .view(&self.store().unwrap())
+            self.memory
+                .view(&self.store)
                 .read_u8(k as _)
                 .unwrap()
                 .hash(state);
@@ -71,8 +65,8 @@ impl PluginInstance {
         // .to_owned();
 
         Self {
-            store: Arc::new(Mutex::new(store)),
-            memory: Arc::new(Mutex::new(memory)),
+            store,
+            memory,
             allocate_storage,
             get_storage_pointer,
             get_storage_len,
@@ -80,32 +74,17 @@ impl PluginInstance {
         }
     }
 
-    pub fn store(&self) -> Result<std::sync::MutexGuard<'_, wasmer::Store>, String> {
-        self.store
-            .lock()
-            .map_err(|_| "Couldn't lock the plugin store".into())
-    }
-
-    pub fn memory(&self) -> Result<std::sync::MutexGuard<'_, wasmer::Memory>, String> {
-        self.memory
-            .lock()
-            .map_err(|_| "Couldn't lock the plugin memory".into())
-    }
-
     /// Write arguments in `__RESULT`.
     pub fn write(&mut self, args: &[&str]) -> Result<(), String> {
         let total_len = args.iter().map(|a| a.len()).sum::<usize>();
         self.allocate_storage
-            .call(&mut self.store()?, &[wasmer::Value::I32(total_len as _)])
+            .call(&mut self.store, &[wasmer::Value::I32(total_len as _)])
             .unwrap();
-        let mut storage_pointer = self
-            .get_storage_pointer
-            .call(&mut self.store()?, &[])
-            .unwrap()[0]
-            .unwrap_i32() as u64;
+        let mut storage_pointer =
+            self.get_storage_pointer.call(&mut self.store, &[]).unwrap()[0].unwrap_i32() as u64;
         for arg in args {
-            self.memory()?
-                .view(&self.store()?)
+            self.memory
+                .view(&self.store)
                 .write(storage_pointer, arg.as_bytes())
                 .unwrap();
             storage_pointer += arg.len() as u64;
@@ -127,19 +106,16 @@ impl PluginInstance {
             .map(|a| wasmer::Value::I32(a.len() as _))
             .collect::<Vec<_>>();
 
-        let code = &function.call(&mut self.store()?, &result_args).unwrap()[0];
+        let code = &function.call(&mut self.store, &result_args).unwrap()[0];
 
         // Get the resulting string in `__RESULT`
-        let storage_pointer = self
-            .get_storage_pointer
-            .call(&mut self.store()?, &[])
-            .unwrap()[0]
-            .unwrap_i32() as u64;
-        let len = self.get_storage_len.call(&mut self.store()?, &[]).unwrap()[0].unwrap_i32();
+        let storage_pointer =
+            self.get_storage_pointer.call(&mut self.store, &[]).unwrap()[0].unwrap_i32() as u64;
+        let len = self.get_storage_len.call(&mut self.store, &[]).unwrap()[0].unwrap_i32();
 
         let mut result = vec![0u8; len as usize];
-        self.memory()?
-            .view(&self.store()?)
+        self.memory
+            .view(&self.store)
             .read(storage_pointer, &mut result)
             .unwrap();
 
@@ -165,8 +141,4 @@ impl PluginInstance {
         Some(function.clone())
         //Some(function.clone())
     }
-}
-
-pub fn string_to_wasmer_len<'a>(s : impl Into<&'a str>) -> wasmer::Value {
-    wasmer::Value::I32(s.into().len() as _)
 }
