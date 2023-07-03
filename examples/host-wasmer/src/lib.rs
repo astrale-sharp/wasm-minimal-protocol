@@ -2,7 +2,7 @@ use wasmer::{Instance, Memory, Store, Value};
 
 #[derive(Debug)]
 pub struct PluginInstance {
-    store: Store,
+    pub store: Store,
     memory: Memory,
     allocate_storage: wasmer::Function,
     get_storage_pointer: wasmer::Function,
