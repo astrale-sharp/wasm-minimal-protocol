@@ -159,4 +159,10 @@ impl PluginInstance {
     pub fn has_function(&self, method: &str) -> bool {
         self.functions.iter().any(|(s, _)| s == method)
     }
+
+    pub fn get_function(&self, function_name: &str) -> Option<wasmer::Function> {
+        let Some((_, function)) = self.functions.iter().find(|(s, _)| s == function_name) else {return None};
+        Some(function.clone())
+        //Some(function.clone())
+    }
 }
