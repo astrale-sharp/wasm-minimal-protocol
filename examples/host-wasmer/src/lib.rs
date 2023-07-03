@@ -11,6 +11,33 @@ pub struct PluginInstance {
     functions: Vec<(String, wasmer::Function)>,
 }
 
+impl std::hash::Hash for PluginInstance {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let len = self
+            .memory()
+            .unwrap()
+            .view(&self.store().unwrap())
+            .data_size();
+        for k in 0..len {
+            self.memory()
+                .unwrap()
+                .view(&self.store().unwrap())
+                .read_u8(k as _)
+                .unwrap()
+                .hash(state);
+        }
+    }
+}
+
+impl PartialEq for PluginInstance {
+    fn eq(&self, other: &Self) -> bool {
+        self.allocate_storage == other.allocate_storage
+            && self.get_storage_pointer == other.get_storage_pointer
+            && self.get_storage_len == other.get_storage_len
+            && self.functions == other.functions
+    }
+}
+
 impl PluginInstance {
     pub fn new(instance: Instance, store: Store) -> Self {
         // important functions that we will often use.
