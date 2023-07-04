@@ -1,13 +1,21 @@
-use wasmer::{Instance, Memory, Module, Store, Value};
+use wasmer::{
+    Function, FunctionEnv, FunctionEnvMut, Imports, Instance, Memory, MemoryType, Module, Store,
+    Value,
+};
+
+#[derive(Debug)]
+struct PersistentData {
+    memory: Memory,
+    result_data: String,
+    arg_buffer: String,
+}
 
 #[derive(Debug)]
 pub struct PluginInstance {
     pub store: Store,
     memory: Memory,
-    allocate_storage: wasmer::Function,
-    get_storage_pointer: wasmer::Function,
-    get_storage_len: wasmer::Function,
     functions: Vec<(String, wasmer::Function)>,
+    persistent_data: FunctionEnv<PersistentData>,
 }
 
 impl std::hash::Hash for PluginInstance {
@@ -25,10 +33,7 @@ impl std::hash::Hash for PluginInstance {
 
 impl PartialEq for PluginInstance {
     fn eq(&self, other: &Self) -> bool {
-        self.allocate_storage == other.allocate_storage
-            && self.get_storage_pointer == other.get_storage_pointer
-            && self.get_storage_len == other.get_storage_len
-            && self.functions == other.functions
+        self.functions == other.functions
     }
 }
 
@@ -37,31 +42,57 @@ impl PluginInstance {
         let mut store = Store::default();
         let module =
             Module::new(&store, bytes).map_err(|err| format!("Couldn't load module: {err}"))?;
-        let import_object = wasmer::imports! {};
+
+        let dummy_memory = Memory::new(&mut store, MemoryType::new(0, None, false)).unwrap();
+        let persistent_data = FunctionEnv::new(
+            &mut store,
+            PersistentData {
+                memory: dummy_memory,
+                result_data: String::new(),
+                arg_buffer: String::new(),
+            },
+        );
+        let mut import_object = Imports::new();
+        import_object.define(
+            "typst_env",
+            "wasm_minimal_protocol_send_result_to_host",
+            Function::new_typed_with_env(
+                &mut store,
+                &persistent_data,
+                |mut env: FunctionEnvMut<PersistentData>, ptr: u32, len: u32| {
+                    let (data, store) = env.data_and_store_mut();
+                    let mut buffer = vec![0u8; len as usize];
+                    data.memory
+                        .view(&store)
+                        .read(ptr as u64, &mut buffer)
+                        .unwrap();
+                    data.result_data = String::from_utf8(buffer).unwrap();
+                },
+            ),
+        );
+        import_object.define(
+            "typst_env",
+            "wasm_minimal_protocol_write_args_to_buffer",
+            Function::new_typed_with_env(
+                &mut store,
+                &persistent_data,
+                |mut env: FunctionEnvMut<PersistentData>, ptr: u32| {
+                    let (data, store) = env.data_and_store_mut();
+                    data.memory
+                        .view(&store)
+                        .write(ptr as u64, data.arg_buffer.as_bytes())
+                        .unwrap();
+                },
+            ),
+        );
+
         let instance = Instance::new(&mut store, &module, &import_object)
             .map_err(|err| format!("Couldn't create a wasm instance: {err}"))?;
-        Ok(Self::new(instance, store))
-    }
 
-    pub fn new(instance: Instance, store: Store) -> Self {
-        // important functions that we will often use.
-        let allocate_storage = instance
-            .exports
-            .get_function("wasm_minimal_protocol_allocate_storage")
-            .unwrap()
-            .clone();
-        let get_storage_pointer = instance
-            .exports
-            .get_function("wasm_minimal_protocol_get_storage_pointer")
-            .unwrap()
-            .clone();
-        let get_storage_len = instance
-            .exports
-            .get_function("wasm_minimal_protocol_get_storage_len")
-            .unwrap()
-            .clone();
+        // important functions that we will often use NOT AHAH 🤣
 
         let memory = instance.exports.get_memory("memory").unwrap().clone();
+        persistent_data.as_mut(&mut store).memory = memory.clone();
 
         let functions = instance
             .exports
@@ -71,39 +102,26 @@ impl PluginInstance {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        // .map_err(|_| "")
-        // .to_owned();
 
-        Self {
+        Ok(Self {
             store,
             memory,
-            allocate_storage,
-            get_storage_pointer,
-            get_storage_len,
+            persistent_data,
             functions,
-        }
+        })
     }
 
     /// Write arguments in `__RESULT`.
-    pub fn write(&mut self, args: &[&str]) -> Result<(), String> {
-        let total_len = args.iter().map(|a| a.len()).sum::<usize>();
-        self.allocate_storage
-            .call(&mut self.store, &[wasmer::Value::I32(total_len as _)])
-            .unwrap();
-        let mut storage_pointer =
-            self.get_storage_pointer.call(&mut self.store, &[]).unwrap()[0].unwrap_i32() as u64;
+    pub fn write(&mut self, args: &[&str]) {
+        let mut all_args = String::new();
         for arg in args {
-            self.memory
-                .view(&self.store)
-                .write(storage_pointer, arg.as_bytes())
-                .unwrap();
-            storage_pointer += arg.len() as u64;
+            all_args += arg;
         }
-        Ok(())
+        self.persistent_data.as_mut(&mut self.store).arg_buffer = all_args;
     }
 
     pub fn call(&mut self, function: &str, args: &[&str]) -> Result<String, String> {
-        self.write(args)?;
+        self.write(args);
 
         let (_, function) = self
             .functions
@@ -119,17 +137,8 @@ impl PluginInstance {
         let code = &function.call(&mut self.store, &result_args).unwrap()[0];
 
         // Get the resulting string in `__RESULT`
-        let storage_pointer =
-            self.get_storage_pointer.call(&mut self.store, &[]).unwrap()[0].unwrap_i32() as u64;
-        let len = self.get_storage_len.call(&mut self.store, &[]).unwrap()[0].unwrap_i32();
 
-        let mut result = vec![0u8; len as usize];
-        self.memory
-            .view(&self.store)
-            .read(storage_pointer, &mut result)
-            .unwrap();
-
-        let s = String::from_utf8(result).map_err(|_| "Plugin data is not utf8".into());
+        let s = std::mem::take(&mut self.persistent_data.as_mut(&mut self.store).result_data);
 
         if code != &Value::I32(0) {
             Err(format!(
@@ -138,7 +147,7 @@ impl PluginInstance {
                 code.i32().unwrap()
             ))
         } else {
-            s
+            Ok(s)
         }
     }
 
