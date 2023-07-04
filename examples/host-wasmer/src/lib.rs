@@ -151,4 +151,8 @@ impl PluginInstance {
         Some(function.clone())
         //Some(function.clone())
     }
+
+    pub fn iter_functions(&self) -> impl Iterator<Item = &String> {
+        self.functions.as_slice().iter().map(|(x, _)| x)
+    }
 }
