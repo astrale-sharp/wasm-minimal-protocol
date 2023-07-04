@@ -1,4 +1,4 @@
-use wasmer::{Instance, Memory, Store, Value};
+use wasmer::{Instance, Memory, Module, Store, Value};
 
 #[derive(Debug)]
 pub struct PluginInstance {
@@ -33,6 +33,16 @@ impl PartialEq for PluginInstance {
 }
 
 impl PluginInstance {
+    pub fn new_from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, String> {
+        let mut store = Store::default();
+        let module =
+            Module::new(&store, bytes).map_err(|err| format!("Couldn't load module: {err}"))?;
+        let import_object = wasmer::imports! {};
+        let instance = Instance::new(&mut store, &module, &import_object)
+            .map_err(|err| format!("Couldn't create a wasm instance: {err}"))?;
+        Ok(Self::new(instance, store))
+    }
+
     pub fn new(instance: Instance, store: Store) -> Self {
         // important functions that we will often use.
         let allocate_storage = instance
