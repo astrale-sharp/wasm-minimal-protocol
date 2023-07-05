@@ -3,18 +3,12 @@
 
 use anyhow::Result;
 use host_wasmer::PluginInstance;
-use wasmer::{Instance, Module, Store};
 
 fn main() -> Result<()> {
-    let mut store = Store::default();
-    let module = Module::new(
-        &store,
-        include_bytes!("../../../target/wasm32-unknown-unknown/debug/hello.wasm"),
-    )?; // this is just compiled with the hello example
-    let import_object = wasmer::imports! {};
-    let instance = Instance::new(&mut store, &module, &import_object)?;
-
-    let mut plugin_instance = PluginInstance::new(instance, store);
+    let mut plugin_instance = PluginInstance::new_from_bytes(include_bytes!(
+        "../../../target/wasm32-unknown-unknown/debug/hello.wasm"
+    ))
+    .unwrap();
 
     println!("{:?}", plugin_instance.call("hello", &[]));
     println!("{:?}", plugin_instance.call("double_it", &["double me!!"]));
@@ -26,6 +20,9 @@ fn main() -> Result<()> {
         "{:?}",
         plugin_instance.call("shuffle", &["value1", "value2", "value3"])
     );
+    println!("{:?}", plugin_instance.call("returns_ok", &[]));
+    println!("{:?}", plugin_instance.call("returns_err", &[]));
+    println!("{:?}", plugin_instance.call("will_panic", &[]));
 
     Ok(())
 }

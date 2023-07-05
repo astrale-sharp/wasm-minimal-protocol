@@ -1,9 +1,10 @@
-/// Minimal protocol for sending/receiving string from and to wasm
-/// if you define a function accepting n &str,
-/// it will be exposed as a function accepting n integers.
-///
-/// The last integer will be ignored, the rest will be used to split a
-/// concatenated string of the args sent by the host
+//! Minimal protocol for sending/receiving string from and to wasm
+//! if you define a function accepting n &str,
+//! it will be exposed as a function accepting n integers.
+//!
+//! The last integer will be ignored, the rest will be used to split a
+//! concatenated string of the args sent by the host
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use venial::*;
@@ -18,24 +19,29 @@ use venial::*;
 /// It's also wanted that the implementation is simple and easy to read so that it can be adapted to C or C++ easily.
 pub fn initiate_protocol(_: TokenStream) -> TokenStream {
     quote!(
-        static mut __RESULT: Vec<u8> = Vec::new();
-
-        #[export_name = "wasm_minimal_protocol_get_storage_pointer"]
-        pub extern "C" fn __wasm_minimal_protocol_internal_function_get_storage_pointer() -> *mut u8
-        {
-            unsafe { __RESULT.as_mut_ptr() }
+        #[link(wasm_import_module = "typst_env")]
+        extern "C" {
+            #[link_name = "wasm_minimal_protocol_send_result_to_host"]
+            fn __send_result_to_host(ptr: *const u8, len: usize);
+            #[link_name = "wasm_minimal_protocol_write_args_to_buffer"]
+            fn __write_args_to_buffer(ptr: *mut u8);
         }
 
-        #[export_name = "wasm_minimal_protocol_allocate_storage"]
-        pub extern "C" fn __wasm_minimal_protocol_internal_function_allocate_storage(
-            length: usize,
-        ) {
-            unsafe { __RESULT.resize(length, 0) };
+        trait __StringOrResultString {
+            type Err;
+            fn convert(self) -> ::std::result::Result<String, Self::Err>;
         }
-
-        #[export_name = "wasm_minimal_protocol_get_storage_len"]
-        pub extern "C" fn __wasm_minimal_protocol_internal_function_get_storage_len() -> usize {
-            unsafe { __RESULT.len() }
+        impl __StringOrResultString for String {
+            type Err = String;
+            fn convert(self) -> ::std::result::Result<String, <Self as __StringOrResultString>::Err> {
+                Ok(self)
+            }
+        }
+        impl<E> __StringOrResultString for ::std::result::Result<String, E> {
+            type Err = E;
+            fn convert(self) -> ::std::result::Result<String, <Self as __StringOrResultString>::Err> {
+                self
+            }
         }
     )
     .into()
@@ -56,14 +62,6 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         ..
     } = func.clone();
 
-    match func.return_ty {
-        Some(ty) if ty.to_token_stream().to_string() != "String" => panic!(
-            "The protocol specifies your function can only return a {}, you tried to return {} ",
-            "String",
-            ty.to_token_stream()
-        ),
-        _ => (),
-    }
     let p = params
         .items()
         .map(|x| match x {
@@ -71,20 +69,27 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 panic!("args receiving self like {x:?} are not allowed in the protocol")
             }
             FnParam::Typed(p) => {
-                let p_to_string = p.ty.to_token_stream().to_string();
                 if p.ty.tokens.len() != 2
                     || p.ty.tokens[0].to_string() != "&"
                     || p.ty.tokens[1].to_string() != "str"
                 {
+                    let p_to_string = p.ty.to_token_stream().to_string();
                     panic!("only parameter of type &str are allowed, not {p_to_string}")
                 }
                 p.name.clone()
             }
         })
         .collect::<Vec<_>>();
+    let p_idx = p
+        .iter()
+        .map(|name| format_ident!("__{}_idx", name))
+        .collect::<Vec<_>>();
+
     let mut get_unsplit_params = quote!(
-        let __unsplit_params = {
-            ::std::str::from_utf8( unsafe { __RESULT.as_slice() } ) }.unwrap();
+        let __total_len = #(#p_idx + )* 0;
+        let mut __unsplit_params = vec![0u8; __total_len];
+        unsafe { __write_args_to_buffer(__unsplit_params.as_mut_ptr()); }
+        let __unsplit_params = String::from_utf8(__unsplit_params).unwrap();
     );
     let mut set_args = quote!(
         let start: usize = 0;
@@ -94,7 +99,7 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         1 => {
             let arg = p.first().unwrap();
             set_args = quote!(
-                let #arg: &str = __unsplit_params;
+                let #arg: &str = &__unsplit_params;
             )
         }
         _ => {
@@ -128,9 +133,9 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let p_idx = p.iter().map(|name| format_ident!("__{}_idx", name));
     let inner_name = format_ident!("__wasm_minimal_protocol_internal_function_{}", name);
     let export_name = proc_macro2::Literal::string(&name.to_string());
+
     quote!(
         #func
 
@@ -139,9 +144,13 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 #get_unsplit_params
                 #set_args
 
-                unsafe { __RESULT = #name(#(#p),*).into_bytes() }
-                0 // indicates everything was successful
-
+                let result = __StringOrResultString::convert(#name(#(#p),*));
+                let (string, code) = match result {
+                    Ok(s) => (s, 0),
+                    Err(err) => (err.to_string(), 1),
+                };
+                unsafe { __send_result_to_host(string.as_ptr(), string.len()); }
+                code // indicates everything was successful
         }
     )
     .into()
