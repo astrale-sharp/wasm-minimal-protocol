@@ -449,13 +449,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hello"
-version = "0.1.0"
-dependencies = [
- "wasm-minimal-protocol",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

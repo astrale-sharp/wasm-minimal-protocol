@@ -3,12 +3,45 @@
 
 use anyhow::Result;
 use host_wasmer::PluginInstance;
+use std::process::Command;
 
 fn main() -> Result<()> {
-    let mut plugin_instance = PluginInstance::new_from_bytes(include_bytes!(
-        "../../../target/wasm32-unknown-unknown/debug/hello.wasm"
-    ))
-    .unwrap();
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.len() != 1 {
+        anyhow::bail!("1 argument required: 'rust' or 'zig'")
+    }
+    let plugin_binary = match args[0].as_str() {
+        "rust" => {
+            println!("=== compiling the Rust plugin");
+            Command::new("cargo")
+                .arg("build")
+                .arg("--target")
+                .arg("wasm32-unknown-unknown")
+                .current_dir("examples/hello_rust")
+                .spawn()?
+                .wait()?;
+            println!("===");
+            std::fs::read("./examples/hello_rust/target/wasm32-unknown-unknown/debug/hello.wasm")?
+        }
+        "zig" => {
+            println!("=== compiling the Zig plugin");
+            Command::new("zig")
+                .arg("build-lib")
+                .arg("hello.zig")
+                .arg("-target")
+                .arg("wasm32-freestanding")
+                .arg("-dynamic")
+                .arg("-rdynamic")
+                .current_dir("examples/hello_zig")
+                .spawn()?
+                .wait()?;
+            println!("===");
+            std::fs::read("examples/hello_zig/hello.wasm")?
+        }
+        _ => anyhow::bail!("unknown argument '{}'", args[0].as_str()),
+    };
+
+    let mut plugin_instance = PluginInstance::new_from_bytes(plugin_binary).unwrap();
 
     println!("{:?}", plugin_instance.call("hello", &[]));
     println!("{:?}", plugin_instance.call("double_it", &["double me!!"]));
