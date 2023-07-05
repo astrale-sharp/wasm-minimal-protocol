@@ -8,7 +8,7 @@ use std::process::Command;
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() != 1 {
-        anyhow::bail!("1 argument required: 'rust' or 'zig'")
+        anyhow::bail!("1 argument required: 'rust', 'zig' or 'c'")
     }
     let plugin_binary = match args[0].as_str() {
         "rust" => {
@@ -37,6 +37,21 @@ fn main() -> Result<()> {
                 .wait()?;
             println!("===");
             std::fs::read("examples/hello_zig/hello.wasm")?
+        }
+        "c" => {
+            println!("=== compiling the C plugin");
+            Command::new("emcc")
+                .arg("--no-entry")
+                .arg("-s")
+                .arg("ERROR_ON_UNDEFINED_SYMBOLS=0")
+                .arg("-o")
+                .arg("hello.wasm")
+                .arg("hello.c")
+                .current_dir("examples/hello_c")
+                .spawn()?
+                .wait()?;
+            println!("===");
+            std::fs::read("examples/hello_c/hello.wasm")?
         }
         _ => anyhow::bail!("unknown argument '{}'", args[0].as_str()),
     };

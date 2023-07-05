@@ -8,3 +8,4 @@ It's primary goal is exploring the design space for making wasm plugins for the 
 To build and test hello and host wasmer you can run 
 - `cargo run -p host-wasmer -- rust` for the Rust version
 - `cargo run -p host-wasmer -- zig` for the Zig version
+- `cargo run -p host-wasmer -- c` for the C version

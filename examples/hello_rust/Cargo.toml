@@ -9,4 +9,4 @@ crate-type = ["cdylib"]
 [dependencies]
 wasm-minimal-protocol = { path = "../../" }
 
-[workspace]
+[workspace] # so that it is not included in the upper workspace
