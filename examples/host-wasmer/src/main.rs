@@ -20,6 +20,9 @@ fn main() -> Result<()> {
         "{:?}",
         plugin_instance.call("shuffle", &["value1", "value2", "value3"])
     );
+    println!("{:?}", plugin_instance.call("returns_ok", &[]));
+    println!("{:?}", plugin_instance.call("returns_err", &[]));
+    println!("{:?}", plugin_instance.call("will_panic", &[]));
 
     Ok(())
 }

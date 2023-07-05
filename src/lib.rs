@@ -1,9 +1,10 @@
-/// Minimal protocol for sending/receiving string from and to wasm
-/// if you define a function accepting n &str,
-/// it will be exposed as a function accepting n integers.
-///
-/// The last integer will be ignored, the rest will be used to split a
-/// concatenated string of the args sent by the host
+//! Minimal protocol for sending/receiving string from and to wasm
+//! if you define a function accepting n &str,
+//! it will be exposed as a function accepting n integers.
+//!
+//! The last integer will be ignored, the rest will be used to split a
+//! concatenated string of the args sent by the host
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use venial::*;
@@ -25,6 +26,23 @@ pub fn initiate_protocol(_: TokenStream) -> TokenStream {
             #[link_name = "wasm_minimal_protocol_write_args_to_buffer"]
             fn __write_args_to_buffer(ptr: *mut u8);
         }
+
+        trait __StringOrResultString {
+            type Err;
+            fn convert(self) -> ::std::result::Result<String, Self::Err>;
+        }
+        impl __StringOrResultString for String {
+            type Err = String;
+            fn convert(self) -> ::std::result::Result<String, <Self as __StringOrResultString>::Err> {
+                Ok(self)
+            }
+        }
+        impl<E> __StringOrResultString for ::std::result::Result<String, E> {
+            type Err = E;
+            fn convert(self) -> ::std::result::Result<String, <Self as __StringOrResultString>::Err> {
+                self
+            }
+        }
     )
     .into()
 }
@@ -44,14 +62,6 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         ..
     } = func.clone();
 
-    match func.return_ty {
-        Some(ty) if ty.to_token_stream().to_string() != "String" => panic!(
-            "The protocol specifies your function can only return a {}, you tried to return {} ",
-            "String",
-            ty.to_token_stream()
-        ),
-        _ => (),
-    }
     let p = params
         .items()
         .map(|x| match x {
@@ -59,11 +69,11 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 panic!("args receiving self like {x:?} are not allowed in the protocol")
             }
             FnParam::Typed(p) => {
-                let p_to_string = p.ty.to_token_stream().to_string();
                 if p.ty.tokens.len() != 2
                     || p.ty.tokens[0].to_string() != "&"
                     || p.ty.tokens[1].to_string() != "str"
                 {
+                    let p_to_string = p.ty.to_token_stream().to_string();
                     panic!("only parameter of type &str are allowed, not {p_to_string}")
                 }
                 p.name.clone()
@@ -125,6 +135,7 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
 
     let inner_name = format_ident!("__wasm_minimal_protocol_internal_function_{}", name);
     let export_name = proc_macro2::Literal::string(&name.to_string());
+
     quote!(
         #func
 
@@ -133,9 +144,13 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 #get_unsplit_params
                 #set_args
 
-                let result = #name(#(#p),*);
-                unsafe { __send_result_to_host(result.as_ptr(), result.len()); }
-                0 // indicates everything was successful
+                let result = __StringOrResultString::convert(#name(#(#p),*));
+                let (string, code) = match result {
+                    Ok(s) => (s, 0),
+                    Err(err) => (err.to_string(), 1),
+                };
+                unsafe { __send_result_to_host(string.as_ptr(), string.len()); }
+                code // indicates everything was successful
         }
     )
     .into()

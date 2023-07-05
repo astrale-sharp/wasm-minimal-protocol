@@ -89,8 +89,6 @@ impl PluginInstance {
         let instance = Instance::new(&mut store, &module, &import_object)
             .map_err(|err| format!("Couldn't create a wasm instance: {err}"))?;
 
-        // important functions that we will often use NOT AHAH 🤣
-
         let memory = instance.exports.get_memory("memory").unwrap().clone();
         persistent_data.as_mut(&mut store).memory = memory.clone();
 
@@ -111,7 +109,6 @@ impl PluginInstance {
         })
     }
 
-    /// Write arguments in `__RESULT`.
     pub fn write(&mut self, args: &[&str]) {
         let mut all_args = String::new();
         for arg in args {
@@ -134,20 +131,22 @@ impl PluginInstance {
             .map(|a| wasmer::Value::I32(a.len() as _))
             .collect::<Vec<_>>();
 
-        let code = &function.call(&mut self.store, &result_args).unwrap()[0];
-
-        // Get the resulting string in `__RESULT`
+        let code = &function
+            .call(&mut self.store, &result_args)
+            .map(|res| res.get(0).cloned().unwrap_or(Value::I32(3))) // if the function returns nothing
+            .unwrap_or(Value::I32(2)); // in case of panic
 
         let s = std::mem::take(&mut self.persistent_data.as_mut(&mut self.store).result_data);
 
-        if code != &Value::I32(0) {
-            Err(format!(
+        match code {
+            Value::I32(0) => Ok(s),
+            Value::I32(1) => Err(format!(
                 "plugin errored with: {:?} with code: {}",
                 s,
                 code.i32().unwrap()
-            ))
-        } else {
-            Ok(s)
+            )),
+            Value::I32(2) => Err("plugin panicked".to_string()),
+            _ => Err("plugin did not respect the protocol".to_string()),
         }
     }
 
@@ -156,9 +155,10 @@ impl PluginInstance {
     }
 
     pub fn get_function(&self, function_name: &str) -> Option<wasmer::Function> {
-        let Some((_, function)) = self.functions.iter().find(|(s, _)| s == function_name) else {return None};
+        let Some((_, function)) = self.functions.iter().find(|(s, _)| s == function_name) else {
+            return None
+        };
         Some(function.clone())
-        //Some(function.clone())
     }
 
     pub fn iter_functions(&self) -> impl Iterator<Item = &String> {
