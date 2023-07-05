@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = [".", "examples/hello", "examples/host-wasmer"]
+members = [".", "./examples/host-wasmer"]
 
 [lib]
 proc-macro = true
