@@ -124,7 +124,7 @@ impl PluginInstance {
             .functions
             .iter()
             .find(|(s, _)| s == function)
-            .ok_or("Plugin doesn't have the method: {function}")?;
+            .ok_or(format!("Plugin doesn't have the method: {function}"))?;
 
         let result_args = args
             .iter()
