@@ -12,3 +12,8 @@ anyhow = "1.0.71"
 wasmer = { version = "3.3.0", default-features = false, features = [
     "cranelift",
 ] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasmer = { version = "3.3.0", default-features = false, features = [
+    "js", "std"
+] }
