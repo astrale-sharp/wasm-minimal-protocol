@@ -2,7 +2,7 @@
 // you need to build the hello example first
 
 use anyhow::Result;
-use host_wasmer::PluginInstance;
+use host_wasmtime::PluginInstance;
 use std::process::Command;
 
 fn main() -> Result<()> {
