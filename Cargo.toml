@@ -9,6 +9,7 @@ members = [
 	"./examples/host-wasmer",
 	"./examples/host-wasmtime",
 	"./examples/host-wasmi",
+	"./examples/test-runner",
 ]
 default-members = ["."]
 

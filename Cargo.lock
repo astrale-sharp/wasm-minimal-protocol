@@ -1138,7 +1138,6 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "host-wasmer"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "wasmer",
  "wasmer-wasix",
 ]
@@ -1147,7 +1146,6 @@ dependencies = [
 name = "host-wasmi"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "wasmi",
 ]
 
@@ -1155,7 +1153,6 @@ dependencies = [
 name = "host-wasmtime"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "wasmtime",
  "wasmtime-wasi",
 ]
@@ -2586,6 +2583,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "411c5bf740737c7918b8b1fe232dca4dc9f8e754b8ad5e20966814001ed0ac6b"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "test-runner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "host-wasmer",
+ "host-wasmi",
+ "host-wasmtime",
 ]
 
 [[package]]

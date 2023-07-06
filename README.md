@@ -1,11 +1,23 @@
 # wasm-minimal-protocol
-A very minimal protocol to send/receive strings from wasm while doing very little/none fancy things.
+A minimal protocol to send/receive strings from wasm while doing very little/none fancy things. 
+Primarily developed to interface with the [typst language.](https://typst.app/).
 
-you can see an example of how it's used  in [hello](./examples/hello/) and how an host might use it in [host-wasmer](./examples/host-wasmer/)
+Your wasm returns a code (0 if everything went fine)
 
-It's primary goal is exploring the design space for making wasm plugins for the [typst language.](https://typst.app/)
+## You want to write a plugin
+See the rust example here for  [Rust](examples/hello_rust/) [Zig](examples/hello_zig/) or [C](examples/hello_c/)
 
-To build and test hello and host wasmer you can run 
-- `cargo run -p host-wasmer -- rust` for the Rust version
-- `cargo run -p host-wasmer -- zig` for the Zig version
-- `cargo run -p host-wasmer -- c` for the C version
+## You want to run tests, seing what these plugins do
+- hosts have been implemented using wasmi, wasmer and wasmtime, you must specify a feature to test one of them
+- you must also specify the abi (unknown or wasi)
+Examples:
+- `cargo run -p test-runner --features host-wasmi,abi_unknown -- zig`
+- `cargo run -p test-runner --features host-wasmer,abi_wasi -- rust`
+- `cargo run -p test-runner --features host-wasmtime -- c`
+
+
+Your plugin may be compiled to the target wasm32-wasi if it's easier for you but true support for wasmi may not be present or easy to support, this question is pending. (host-wasmi doesn't support it yet)
+
+
+## Tips
+- If you run into error about snapshot-preview etc, you should try using [this project](https://github.com/near/wasi-stub) on your wasm file. It stubs all wasi function in your wasm, don't expect print or read_file to work anymore.
