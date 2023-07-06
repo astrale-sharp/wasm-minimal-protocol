@@ -45,7 +45,7 @@ compile_error!(
 
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 1 {
+    if args.len() < 1 {
         anyhow::bail!("1 argument required: 'rust', 'zig' or 'c'")
     }
     let plugin_binary = match args[0].as_str() {
@@ -107,6 +107,9 @@ fn main() -> Result<()> {
             panic!(
                 "for testing rust or zig, you must enable one feature in [abi_unknown, abi_wasi]"
             )
+        }
+        "-i"| "--input" => {
+            std::fs::read(args[1].as_str())?
         }
         _ => anyhow::bail!("unknown argument '{}'", args[0].as_str()),
     };
