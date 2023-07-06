@@ -19,27 +19,6 @@ pub struct PluginInstance {
     persistent_data: FunctionEnv<PersistentData>,
 }
 
-impl std::hash::Hash for PluginInstance {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let len = self.memory.view(&self.store).data_size();
-        for k in 0..len {
-            self.memory
-                .view(&self.store)
-                .read_u8(k as _)
-                .unwrap()
-                .hash(state);
-        }
-    }
-}
-
-impl PartialEq for PluginInstance {
-    fn eq(&self, other: &Self) -> bool {
-        self.functions
-            .iter()
-            .zip(other.functions.iter())
-            .all(|((s1, _), (s2, _))| s1 == s2)
-    }
-}
 
 impl PluginInstance {
     pub fn new_from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, String> {

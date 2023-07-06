@@ -23,27 +23,6 @@ pub struct PluginInstance {
     functions: Vec<(String, Func)>,
 }
 
-impl std::hash::Hash for PluginInstance {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let len = self.memory.size(&self.store);
-        len.hash(state);
-        let mut byte = [0u8];
-        for k in 0..len {
-            self.memory.read(&self.store, k as _, &mut byte).unwrap();
-            byte[0].hash(state);
-        }
-    }
-}
-
-impl PartialEq for PluginInstance {
-    fn eq(&self, other: &Self) -> bool {
-        self.functions
-            .iter()
-            .zip(other.functions.iter())
-            .all(|((s1, _), (s2, _))| s1 == s2)
-    }
-}
-
 impl PluginInstance {
     pub fn new_from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, String> {
         let engine = Engine::default();
