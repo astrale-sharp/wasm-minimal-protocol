@@ -1,7 +1,8 @@
 use wasmer::{
-    Function, FunctionEnv, FunctionEnvMut, Imports, Instance, Memory, MemoryType, Module, Store,
-    Value,
+    AsStoreMut as _, AsStoreRef as _, Extern, Function, FunctionEnv, FunctionEnvMut, Instance,
+    Memory, MemoryType, Module, Store, Value,
 };
+use wasmer_wasix::{generate_import_object_from_env, WasiEnv, WasiFunctionEnv};
 
 #[derive(Debug)]
 struct PersistentData {
@@ -14,7 +15,7 @@ struct PersistentData {
 pub struct PluginInstance {
     pub store: Store,
     memory: Memory,
-    functions: Vec<(String, wasmer::Function)>,
+    functions: Vec<(String, Function)>,
     persistent_data: FunctionEnv<PersistentData>,
 }
 
@@ -33,7 +34,10 @@ impl std::hash::Hash for PluginInstance {
 
 impl PartialEq for PluginInstance {
     fn eq(&self, other: &Self) -> bool {
-        self.functions == other.functions
+        self.functions
+            .iter()
+            .zip(other.functions.iter())
+            .all(|((s1, _), (s2, _))| s1 == s2)
     }
 }
 
@@ -52,7 +56,14 @@ impl PluginInstance {
                 arg_buffer: String::new(),
             },
         );
-        let mut import_object = Imports::new();
+        let wasi_env = WasiEnv::builder("test").build().unwrap();
+        let mut wasi_function_env = WasiFunctionEnv::new(&mut store, wasi_env);
+
+        let mut import_object = generate_import_object_from_env(
+            &mut store,
+            &wasi_function_env.env,
+            wasmer_wasix::WasiVersion::Latest,
+        );
         import_object.define(
             "typst_env",
             "wasm_minimal_protocol_send_result_to_host",
@@ -60,13 +71,11 @@ impl PluginInstance {
                 &mut store,
                 &persistent_data,
                 |mut env: FunctionEnvMut<PersistentData>, ptr: u32, len: u32| {
-                    let (data, store) = env.data_and_store_mut();
+                    let memory = env.data().memory.clone();
+                    let store = env.as_store_mut();
                     let mut buffer = vec![0u8; len as usize];
-                    data.memory
-                        .view(&store)
-                        .read(ptr as u64, &mut buffer)
-                        .unwrap();
-                    data.result_data = String::from_utf8(buffer).unwrap();
+                    memory.view(&store).read(ptr as u64, &mut buffer).unwrap();
+                    env.data_mut().result_data = String::from_utf8(buffer).unwrap();
                 },
             ),
         );
@@ -76,8 +85,9 @@ impl PluginInstance {
             Function::new_typed_with_env(
                 &mut store,
                 &persistent_data,
-                |mut env: FunctionEnvMut<PersistentData>, ptr: u32| {
-                    let (data, store) = env.data_and_store_mut();
+                |env: FunctionEnvMut<PersistentData>, ptr: u32| {
+                    let data = env.data();
+                    let store = env.as_store_ref();
                     data.memory
                         .view(&store)
                         .write(ptr as u64, data.arg_buffer.as_bytes())
@@ -96,10 +106,11 @@ impl PluginInstance {
             .exports
             .iter()
             .filter_map(|(s, e)| match e {
-                wasmer::Extern::Function(f) => Some((s.to_owned(), f.clone())),
+                Extern::Function(f) => Some((s.to_owned(), f.clone())),
                 _ => None,
             })
             .collect::<Vec<_>>();
+        wasi_function_env.initialize(&mut store, instance).unwrap();
 
         Ok(Self {
             store,
@@ -128,10 +139,10 @@ impl PluginInstance {
 
         let result_args = args
             .iter()
-            .map(|a| wasmer::Value::I32(a.len() as _))
+            .map(|a| Value::I32(a.len() as _))
             .collect::<Vec<_>>();
 
-        let code = &function
+        let code = function
             .call(&mut self.store, &result_args)
             .map(|res| res.get(0).cloned().unwrap_or(Value::I32(3))) // if the function returns nothing
             .unwrap_or(Value::I32(2)); // in case of panic
@@ -154,7 +165,7 @@ impl PluginInstance {
         self.functions.iter().any(|(s, _)| s == method)
     }
 
-    pub fn get_function(&self, function_name: &str) -> Option<wasmer::Function> {
+    pub fn get_function(&self, function_name: &str) -> Option<Function> {
         let Some((_, function)) = self.functions.iter().find(|(s, _)| s == function_name) else {
             return None
         };

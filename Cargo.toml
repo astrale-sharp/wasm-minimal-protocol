@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = [".", "./examples/host-wasmer"]
+members = [
+	".",
+	"./examples/host-wasmer",
+	"./examples/host-wasmtime",
+]
+default-members = ["."]
 
 [lib]
 proc-macro = true

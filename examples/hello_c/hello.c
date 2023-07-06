@@ -123,6 +123,5 @@ int32_t returns_err() {
   return 1;
 }
 
-// Needs WASI
-// EMSCRIPTEN_KEEPALIVE
-// int32_t will_panic() { exit(1); }
+EMSCRIPTEN_KEEPALIVE
+int32_t will_panic() { exit(1); }
