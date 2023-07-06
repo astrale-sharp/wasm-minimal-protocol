@@ -16,12 +16,12 @@ fn main() -> Result<()> {
             Command::new("cargo")
                 .arg("build")
                 .arg("--target")
-                .arg("wasm32-unknown-unknown")
+                .arg("wasm32-wasi")
                 .current_dir("examples/hello_rust")
                 .spawn()?
                 .wait()?;
             println!("===");
-            std::fs::read("./examples/hello_rust/target/wasm32-unknown-unknown/debug/hello.wasm")?
+            std::fs::read("./examples/hello_rust/target/wasm32-wasi/debug/hello.wasm")?
         }
         "zig" => {
             println!("=== compiling the Zig plugin");
