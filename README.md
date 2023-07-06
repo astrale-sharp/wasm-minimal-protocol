@@ -14,6 +14,9 @@ Examples:
 - `cargo run -p test-runner --features host-wasmi,abi_unknown -- zig`
 - `cargo run -p test-runner --features host-wasmer,abi_wasi -- rust`
 - `cargo run -p test-runner --features host-wasmtime -- c`
+you may also specify --input or -i to choose a file:
+`cargo run -p test-runner --features host-wasmi -- -i my_wasm_file.wasm`
+
 
 
 Your plugin may be compiled to the target wasm32-wasi if it's easier for you but true support for wasmi may not be present or easy to support, this question is pending. (host-wasmi doesn't support it yet)
@@ -21,3 +24,4 @@ Your plugin may be compiled to the target wasm32-wasi if it's easier for you but
 
 ## Tips
 - If you run into error about snapshot-preview etc, you should try using [this project](https://github.com/near/wasi-stub) on your wasm file. It stubs all wasi function in your wasm, don't expect print or read_file to work anymore.
+- host-wasmi compiles fastest ;)
