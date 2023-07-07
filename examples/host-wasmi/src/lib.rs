@@ -1,4 +1,4 @@
-use wasmi::{Caller, Engine, Func as Function, Linker, Module, Value};
+use wasmi::{Caller, Engine, Func as Function, Linker, Module, Value, AsContext};
 
 type Store = wasmi::Store<PersistentData>;
 
@@ -21,7 +21,7 @@ impl PluginInstance {
             result_data: String::default(),
             arg_buffer: String::default(),
         };
-        let mut store = Store::new(&engine, data.clone());
+        let mut store = Store::new(&engine, data);
 
         let module = Module::new(&engine, bytes.as_ref())
             .map_err(|err| format!("Couldn't load module: {err}"))?;
@@ -149,10 +149,14 @@ impl PluginInstance {
         let Some((_, function)) = self.functions.iter().find(|(s, _)| s == function_name) else {
             return None
         };
-        Some(function.clone())
+        Some(*function)
     }
 
     pub fn iter_functions(&self) -> impl Iterator<Item = &String> {
         self.functions.as_slice().iter().map(|(x, _)| x)
+    }
+
+    pub fn get_store(&self) -> &impl AsContext {
+        &self.store
     }
 }
