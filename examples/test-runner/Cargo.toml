@@ -13,6 +13,7 @@ cfg-if = "1.0.0"
 
 
 [features]
+default = ["host-wasmi", "abi_unknown"]
 host-wasmer = ["dep:host-wasmer"]
 host-wasmtime = ["dep:host-wasmtime"]
 host-wasmi = ["dep:host-wasmi"]
