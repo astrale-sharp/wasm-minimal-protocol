@@ -1,4 +1,4 @@
-use wasmtime::{Caller, Engine, Func, Linker, Memory, Module, Store, Val};
+use wasmtime::{Caller, Engine, Func, Linker, Module, Store, Val};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder};
 
 struct PersistentData {
@@ -19,7 +19,6 @@ impl std::fmt::Debug for PersistentData {
 #[derive(Debug)]
 pub struct PluginInstance {
     store: Store<PersistentData>,
-    memory: Memory,
     functions: Vec<(String, Func)>,
 }
 
@@ -78,15 +77,9 @@ impl PluginInstance {
                 e.into_func().map(|func| (name, func))
             })
             .collect::<Vec<_>>();
-        let memory = instance
-            .get_export(&mut store, "memory")
-            .unwrap()
-            .into_memory()
-            .unwrap();
 
         Ok(Self {
             store,
-            memory,
             functions,
         })
     }

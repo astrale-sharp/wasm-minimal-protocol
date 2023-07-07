@@ -14,7 +14,6 @@ struct PersistentData {
 #[derive(Debug)]
 pub struct PluginInstance {
     pub store: Store,
-    memory: Memory,
     functions: Vec<(String, Function)>,
     persistent_data: FunctionEnv<PersistentData>,
 }
@@ -79,7 +78,7 @@ impl PluginInstance {
             .map_err(|err| format!("Couldn't create a wasm instance: {err}"))?;
 
         let memory = instance.exports.get_memory("memory").unwrap().clone();
-        persistent_data.as_mut(&mut store).memory = memory.clone();
+        persistent_data.as_mut(&mut store).memory = memory;
 
         let functions = instance
             .exports
@@ -93,7 +92,6 @@ impl PluginInstance {
 
         Ok(Self {
             store,
-            memory,
             persistent_data,
             functions,
         })
