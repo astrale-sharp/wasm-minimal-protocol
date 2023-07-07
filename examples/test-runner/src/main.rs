@@ -16,14 +16,14 @@ use host_wasmi::PluginInstance;
 #[cfg(feature = "abi_unknown")]
 mod consts {
     pub const RUST_TARGET: &str = "wasm32-unknown-unknown";
-    pub const RUST_PATH: &str = "../hello_rust/target/wasm32-unknown-unknown/debug/hello.wasm";
+    pub const RUST_PATH: &str = "examples/hello_rust/target/wasm32-unknown-unknown/debug/hello.wasm";
     pub const ZIG_TARGET: &str = "wasm32-freestanding";
 }
 
 #[cfg(feature = "abi_wasi")]
 mod consts {
     pub const RUST_TARGET: &str = "wasm32-wasi";
-    pub const RUST_PATH: &str = "../hello_rust/target/wasm32-wasi/debug/hello.wasm";
+    pub const RUST_PATH: &str = "examples/hello_rust/target/wasm32-wasi/debug/hello.wasm";
     pub const ZIG_TARGET: &str = "wasm32-wasi";
 }
 
@@ -32,7 +32,7 @@ mod consts {
     all(feature = "host-wasmtime", feature = "host-wasmi"),
     all(feature = "host-wasmer", feature = "host-wasmi"),
 ))]
-compile_error!("Only one feature in [host-wasmtime, host-wasmi, host-wasmer] must be specified.");
+compile_error!("Only one feature in [host-wasmtime, host-wasmi, host-wasmer] must be specified. host-wasmi is enabled by default.");
 
 #[cfg(not(any(
     feature = "host-wasmtime",
@@ -45,7 +45,7 @@ compile_error!(
 
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() < 1 {
+    if args.is_empty() {
         anyhow::bail!("1 argument required: 'rust', 'zig' or 'c'")
     }
     let plugin_binary = match args[0].as_str() {
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
                 .arg("build")
                 .arg("--target")
                 .arg(consts::RUST_TARGET)
-                .current_dir("../hello_rust")
+                .current_dir("examples/hello_rust")
                 .spawn()?
                 .wait()?;
             println!("===");
@@ -72,12 +72,12 @@ fn main() -> Result<()> {
                 .arg(consts::ZIG_TARGET)
                 .arg("-dynamic")
                 .arg("-rdynamic")
-                .current_dir("../examples/hello_zig")
+                .current_dir("examples/hello_zig")
                 .spawn()
                 .expect("do you have zig installed and in the path?")
                 .wait()?;
             println!("===");
-            std::fs::read("../examples/hello_zig/hello.wasm")?
+            std::fs::read("examples/hello_zig/hello.wasm")?
         }
         "c" => {
             println!("=== compiling the C plugin");
@@ -94,12 +94,12 @@ fn main() -> Result<()> {
                 .arg("-o")
                 .arg("hello.wasm")
                 .arg("hello.c")
-                .current_dir("../hello_c/")
+                .current_dir("examples/hello_c/")
                 .spawn()
                 .expect("do you have emcc installed and in the path?")
                 .wait()?;
             println!("===");
-            std::fs::read("../hello_c/hello.wasm")?
+            std::fs::read("examples/hello_c/hello.wasm")?
         }
 
         #[cfg(not(any(feature = "abi_unknown", feature = "abi_wasi")))]
