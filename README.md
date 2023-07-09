@@ -5,7 +5,7 @@ Primarily developed to interface with the [typst language.](https://typst.app/).
 Your wasm returns a code (0 if everything went fine)
 
 ## You want to write a plugin
-See the rust example here for  [Rust](examples/hello_rust/) [Zig](examples/hello_zig/) or [C](examples/hello_c/)
+See the rust example here for  [Rust](examples/hello_rust/), [Zig](examples/hello_zig/) or [C](examples/hello_c/)
 
 ## You want to run tests, seing what these plugins do
 - hosts have been implemented using wasmi, wasmer and wasmtime, the default is wasmi, you must specify any other one with a feature.
