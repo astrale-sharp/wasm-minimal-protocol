@@ -16,7 +16,8 @@ use host_wasmi::PluginInstance;
 #[cfg(feature = "abi_unknown")]
 mod consts {
     pub const RUST_TARGET: &str = "wasm32-unknown-unknown";
-    pub const RUST_PATH: &str = "examples/hello_rust/target/wasm32-unknown-unknown/debug/hello.wasm";
+    pub const RUST_PATH: &str =
+        "examples/hello_rust/target/wasm32-unknown-unknown/debug/hello.wasm";
     pub const ZIG_TARGET: &str = "wasm32-freestanding";
 }
 
@@ -44,6 +45,7 @@ compile_error!(
 );
 
 fn main() -> Result<()> {
+    let mut custom_run = false;
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.is_empty() {
         anyhow::bail!("1 argument required: 'rust', 'zig' or 'c'")
@@ -60,6 +62,7 @@ fn main() -> Result<()> {
                 .spawn()?
                 .wait()?;
             println!("===");
+            println!("getting wasm from: {}", consts::RUST_PATH);
             std::fs::read(consts::RUST_PATH)?
         }
         #[cfg(any(feature = "abi_unknown", feature = "abi_wasi"))]
@@ -77,6 +80,7 @@ fn main() -> Result<()> {
                 .expect("do you have zig installed and in the path?")
                 .wait()?;
             println!("===");
+            println!("getting wasm from: {}", "examples/hello_zig/hello.wasm");
             std::fs::read("examples/hello_zig/hello.wasm")?
         }
         "c" => {
@@ -99,6 +103,7 @@ fn main() -> Result<()> {
                 .expect("do you have emcc installed and in the path?")
                 .wait()?;
             println!("===");
+            println!("getting wasm from: {}", "examples/hello_c/hello.wasm");
             std::fs::read("examples/hello_c/hello.wasm")?
         }
 
@@ -108,13 +113,31 @@ fn main() -> Result<()> {
                 "for testing rust or zig, you must enable one feature in [abi_unknown, abi_wasi]"
             )
         }
-        "-i"| "--input" => {
+        "-i" | "--input" => {
+            custom_run = true;
+            println!("===");
+            println!("getting wasm from: {}", args[1].as_str());
+            println!("running func: {}", args.get(2).expect("you must specify a function to run").as_str());
             std::fs::read(args[1].as_str())?
         }
         _ => anyhow::bail!("unknown argument '{}'", args[0].as_str()),
     };
 
     let mut plugin_instance = PluginInstance::new_from_bytes(plugin_binary).unwrap();
+    if custom_run {
+        println!(
+            "{:?}",
+            plugin_instance.call(
+                args[2].as_str(),
+                args.iter()
+                    .skip(3)
+                    .map(|x| x.as_str())
+                    .collect::<Vec<_>>()
+                    .as_slice()
+            )
+        );
+        return Ok(());
+    }
 
     println!("{:?}", plugin_instance.call("hello", &[]));
     println!("{:?}", plugin_instance.call("double_it", &["double me!!"]));
