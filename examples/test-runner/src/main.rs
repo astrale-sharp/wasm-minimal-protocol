@@ -80,7 +80,7 @@ fn main() -> Result<()> {
                 .expect("do you have zig installed and in the path?")
                 .wait()?;
             println!("===");
-            println!("getting wasm from: {}", "examples/hello_zig/hello.wasm");
+            println!("getting wasm from: examples/hello_zig/hello.wasm");
             std::fs::read("examples/hello_zig/hello.wasm")?
         }
         "c" => {
@@ -103,7 +103,7 @@ fn main() -> Result<()> {
                 .expect("do you have emcc installed and in the path?")
                 .wait()?;
             println!("===");
-            println!("getting wasm from: {}", "examples/hello_c/hello.wasm");
+            println!("getting wasm from: examples/hello_c/hello.wasm");
             std::fs::read("examples/hello_c/hello.wasm")?
         }
 
