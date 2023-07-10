@@ -13,7 +13,7 @@ members = [
 	"./examples/host-wasmi",
 	"./examples/test-runner",
 ]
-default-members = ["."]
+default-members = [".", "./examples/test-runner"]
 
 [lib]
 proc-macro = true
