@@ -1,24 +1,39 @@
-//! Minimal protocol for sending/receiving string from and to wasm
-//! if you define a function accepting n &str,
-//! it will be exposed as a function accepting n integers.
-//!
-//! The last integer will be ignored, the rest will be used to split a
-//! concatenated string of the args sent by the host
+//! Minimal protocol for sending/receiving string from and to a wasm host.
+//! 
+//! If you define a function accepting `n` strings (`&str`, not `String`), it will 
+//! internally be exported as a function accepting `n` integers.
+//! 
+//! # Example
+//! 
+//! ```
+//! use wasm_minimal_protocol::wasm_func;
+//! 
+//! wasm_minimal_protocol::initiate_protocol!();
+//! 
+//! #[wasm_func]
+//! fn concatenate(arg1: &str, arg2: &str) -> String {
+//!     format!("{}{}", arg1, arg2)
+//! }
+//! ```
+
+/// Documentation-only item, to describe the low-level protocol used by this crate.
+/// 
+#[cfg(doc)]
+#[doc = include_str!("../protocol.md")]
+#[proc_macro]
+pub fn protocol(stream: TokenStream) -> TokenStream {}
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use venial::*;
 
+/// Macro that sets up the correct imports and traits to be used by [`macro@wasm_func`].
+/// 
+/// This macro should be called only once, preferably at the root of the crate. It does 
+/// not take any arguments.
 #[proc_macro]
-/// Must be called once.
-///
-/// Why not a simple static ? why not a thread_local and/or a cell? why no defense against data race ?
-///
-/// The plugin will never be aware if it is being sent in a thread and hence always single threaded, it's the host that needs to make sure to be Send and Sync.
-///
-/// It's also wanted that the implementation is simple and easy to read so that it can be adapted to C or C++ easily.
-pub fn initiate_protocol(_: TokenStream) -> TokenStream {
-    quote!(
+pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
+    let mut result = quote!(
         #[link(wasm_import_module = "typst_env")]
         extern "C" {
             #[link_name = "wasm_minimal_protocol_send_result_to_host"]
@@ -43,10 +58,50 @@ pub fn initiate_protocol(_: TokenStream) -> TokenStream {
                 self
             }
         }
-    )
-    .into()
+    );
+    if !stream.is_empty() {
+        result.extend(quote!(
+            compile_error!("This macro does not take any arguments");
+        ));
+    }
+    result.into()
 }
 
+/// Wrap the function to be used with the [protocol!].
+/// 
+/// # Arguments
+/// 
+/// All the arguments of the function should be `&str`, without lifetimes.
+/// 
+/// # Return type
+/// 
+/// The return type of the function should be `String` or `Result<String, E>` where
+/// `E: ToString`.
+/// 
+/// If the function return `String`, it will be implicitely wrapped in `Ok`.
+/// 
+/// # Example
+/// 
+/// ```
+/// use wasm_minimal_protocol::wasm_func;
+/// 
+/// wasm_minimal_protocol::initiate_protocol!();
+/// 
+/// #[wasm_func]
+/// fn function_one() -> String {
+///     String::new()
+/// }
+/// 
+/// #[wasm_func]
+/// fn function_two(arg1: &str, arg2: &str) -> Result<String, i32> {
+///     Ok(String::from("Normal message"))
+/// }
+/// 
+/// #[wasm_func]
+/// fn function_three(arg1: &str) -> Result<String, String> {
+///     Err(String::from("Error message"))
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
     let item = proc_macro2::TokenStream::from(item);
@@ -140,7 +195,7 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         #func
 
         #[export_name = #export_name]
-        #vis_marker fn #inner_name(#(#p_idx: usize),*) -> usize {
+        #vis_marker fn #inner_name(#(#p_idx: usize),*) -> i32 {
                 #get_unsplit_params
                 #set_args
 
