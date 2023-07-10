@@ -117,7 +117,12 @@ fn main() -> Result<()> {
             custom_run = true;
             println!("===");
             println!("getting wasm from: {}", args[1].as_str());
-            println!("running func: {}", args.get(2).expect("you must specify a function to run").as_str());
+            println!(
+                "running func: {}",
+                args.get(2)
+                    .expect("you must specify a function to run")
+                    .as_str()
+            );
             std::fs::read(args[1].as_str())?
         }
         _ => anyhow::bail!("unknown argument '{}'", args[0].as_str()),
