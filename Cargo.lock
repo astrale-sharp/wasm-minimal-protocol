@@ -3115,6 +3115,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasi-stub"
+version = "0.1.0"
+dependencies = [
+ "wasm-encoder",
+ "wasmparser 0.107.0",
+]
+
+[[package]]
 name = "wasm-bindgen"
 version = "0.2.84"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3476,6 +3484,16 @@ checksum = "2c437373cac5ea84f1113d648d51f71751ffbe3d90c00ae67618cf20d0b5ee7b"
 dependencies = [
  "indexmap 1.9.3",
  "url",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.107.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29e3ac9b780c7dda0cac7a52a5d6d2d6707cc6e3451c9db209b6c758f40d7acb"
+dependencies = [
+ "indexmap 1.9.3",
+ "semver 1.0.17",
 ]
 
 [[package]]
