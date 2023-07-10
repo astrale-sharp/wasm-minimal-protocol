@@ -27,5 +27,5 @@ Your plugin may be compiled to the target wasm32-wasi if it's easier for you but
 
 
 ## Tips
-- If you run into error about snapshot-preview etc, you should try using **currently in search for a good wasi stubber script, wasi-stub is hard to make compile** on your wasm file. It stubs all wasi function in your wasm, don't expect print or read_file to work anymore.
+- If you run into error about snapshot-preview etc, you should try using [wasi-stub](./wasi-stub/) on your wasm file. It stubs all wasi function in your wasm, don't expect print or read_file to work anymore.
 - host-wasmi compiles fastest ;)
