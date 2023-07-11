@@ -78,10 +78,7 @@ impl PluginInstance {
             })
             .collect::<Vec<_>>();
 
-        Ok(Self {
-            store,
-            functions,
-        })
+        Ok(Self { store, functions })
     }
 
     pub fn write(&mut self, args: &[&str]) {

@@ -80,7 +80,7 @@ fn main() -> Result<()> {
                 .expect("do you have zig installed and in the path?")
                 .wait()?;
             println!("===");
-            println!("getting wasm from: {}", "examples/hello_zig/hello.wasm");
+            println!("getting wasm from: examples/hello_zig/hello.wasm");
             std::fs::read("examples/hello_zig/hello.wasm")?
         }
         "c" => {
@@ -103,7 +103,7 @@ fn main() -> Result<()> {
                 .expect("do you have emcc installed and in the path?")
                 .wait()?;
             println!("===");
-            println!("getting wasm from: {}", "examples/hello_c/hello.wasm");
+            println!("getting wasm from: examples/hello_c/hello.wasm");
             std::fs::read("examples/hello_c/hello.wasm")?
         }
 
@@ -117,7 +117,12 @@ fn main() -> Result<()> {
             custom_run = true;
             println!("===");
             println!("getting wasm from: {}", args[1].as_str());
-            println!("running func: {}", args.get(2).expect("you must specify a function to run").as_str());
+            println!(
+                "running func: {}",
+                args.get(2)
+                    .expect("you must specify a function to run")
+                    .as_str()
+            );
             std::fs::read(args[1].as_str())?
         }
         _ => anyhow::bail!("unknown argument '{}'", args[0].as_str()),

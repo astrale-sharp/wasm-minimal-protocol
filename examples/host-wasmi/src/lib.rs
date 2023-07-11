@@ -1,4 +1,4 @@
-use wasmi::{Caller, Engine, Func as Function, Linker, Module, Value, AsContext};
+use wasmi::{AsContext, Caller, Engine, Func as Function, Linker, Module, Value};
 
 type Store = wasmi::Store<PersistentData>;
 
