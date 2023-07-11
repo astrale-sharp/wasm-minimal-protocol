@@ -1,31 +1,71 @@
 # wasm-minimal-protocol
-A minimal protocol to send/receive strings from wasm while doing very little/none fancy things. 
-Primarily developed to interface with the [typst language.](https://typst.app/).
 
-Your wasm returns a code (0 if everything went fine)
+A minimal protocol to send/receive strings from wasm.
+Primarily developed to interface with the [typst language](https://typst.app/).
 
 ## You want to write a plugin
-See the rust example here for  [Rust](examples/hello_rust/), [Zig](examples/hello_zig/) or [C](examples/hello_c/)
 
-## You want to run tests, seing what these plugins do
-- hosts have been implemented using wasmi, wasmer and wasmtime, the default is wasmi, you must specify any other one with a feature.
-- you must also specify the abi (unknown or wasi), the default is unknown.
-- host-wasmi cannot run abi_wasi if the functions have not been stubbed
+A plugin can be written in Rust, C, Zig, or any language than compiles to WebAssembly.
 
-Examples (run from root of project):
-- `cargo run -p test-runner -- zig`
-- `cargo run -p test-runner -- rust`
-- `cargo run -p test-runner -- c` will fail cause the c hasn't been stub.
-- `cargo run -p test-runner --no-default-features --features host-wasmer -- c` will succeed
-- `cargo run -p test-runner --no-default-features --features host-wasmtime,abi_wasi -- rust`
-- `cargo run -p test-runner --no-default-features --features host-wasmtime,abi_wasi -- zig`
-you may also specify --input or -i to choose a file:
-`cargo run -p test-runner --features host-wasmi -- -i my_wasm_file.wasm`
+Rust plugins can use this crate to automatically implement the protocol with a macro:
 
+```rust
+use wasm_minimal_protocol::*;
 
-Your plugin may be compiled to the target wasm32-wasi if it's easier for you but true support for wasmi may not be present or easy to support, this question is pending. (host-wasmi doesn't support it yet)
+initiate_protocol!();
 
+#[wasm_func]
+pub fn hello() -> String {
+    String::from("Hello from wasm!!!")
+}
+```
 
-## Tips
-- If you run into error about snapshot-preview etc, you should try using [wasi-stub](./wasi-stub/) on your wasm file. It stubs all wasi function in your wasm, don't expect print or read_file to work anymore.
-- host-wasmi compiles fastest ;)
+For others, the protocols is described in the file [protocol.md](./protocol.md). You should also take a look at the [examples](#examples).
+
+## Examples
+
+Examples are implemented in [Rust](examples/hello_rust/), [Zig](examples/hello_zig/) and [C](examples/hello_c/). Each of them is run using the [test-runner](examples/test-runner/).
+
+The example can run using [`wasmi`](https://github.com/paritytech/wasmi), [`wasmer`](https://github.com/wasmerio/wasmer) or [`wasmtime`](https://github.com/bytecodealliance/wasmtime).
+
+The command to run examples (from the top-level directory) is:
+
+```sh
+cargo run -- <lang>
+# or
+cargo run --no-default-features --features <host>,<abi> -- <lang>
+# or
+cargo run -- -i <PATH> <func> <args>
+# or
+cargo run --no-default-features --features <host>,<abi> -- -i <PATH> <func> <args>
+```
+
+Where:
+
+- `<lang>` is `rust`, `zig` or `c`
+- `<host>` is `host-wasmi`, `host-wasmtime` or `host-wasmer` (defaults to `host-wasmi`)
+- `<abi>` is `abi_unknown` or `abi_wasi` (defaults to `abi_unknown`)
+- `<PATH>` is the path to a wasm file
+- `<func>` is the exported function to call in the wasm file, with `<args>` as arguments
+
+### Dependencies
+
+- All commands require a valid [Rust toolchain](https://www.rust-lang.org/).
+- The Zig example requires the [Zig toolchain](https://ziglang.org/learn/getting-started/#installing-zig).
+- The C example requires [emscripten](https://emscripten.org/docs/getting_started/downloads.html).
+
+### Some commands
+
+```sh
+cargo run -- rust # compile and run the Rust example
+cargo run -- zig # compile and run the Zig example
+# NOTE: this needs the abi_wasi feature, because the wasi functions are not stubbed. See the 'Tips' section to learn more.
+cargo run --no-default-features --features host-wasmtime,abi_wasi -- c # compile and run the C example
+cargo run -- -i MY_WASM_FILE.wasm MY_FUNCTION arg1 arg2
+```
+
+### Tips
+
+- `host-wasmi` does not support running with WASI (and thus `abi_wasi` will have no effects).
+- If the runner complains about missing definition for `wasi_snapshot_preview1` functions, try running your `.wasm` through [wasi-stub](./wasi-stub/). It stubs all wasi function in your wasm, so don't expect print or read_file to work anymore.
+- host-wasmi compiles fastest 😉

@@ -18,7 +18,6 @@ pub struct PluginInstance {
     persistent_data: FunctionEnv<PersistentData>,
 }
 
-
 impl PluginInstance {
     pub fn new_from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, String> {
         let mut store = Store::default();
