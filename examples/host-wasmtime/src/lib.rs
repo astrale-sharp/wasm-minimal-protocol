@@ -3,8 +3,8 @@ use wasmtime_wasi::{WasiCtx, WasiCtxBuilder};
 
 struct PersistentData {
     wasi_ctx: WasiCtx,
-    result_data: String,
-    arg_buffer: String,
+    result_data: Vec<u8>,
+    arg_buffer: Vec<u8>,
 }
 
 impl std::fmt::Debug for PersistentData {
@@ -35,8 +35,8 @@ impl PluginInstance {
         let mut store = Store::new(
             &engine,
             PersistentData {
-                result_data: String::new(),
-                arg_buffer: String::new(),
+                result_data: Vec::new(),
+                arg_buffer: Vec::new(),
                 wasi_ctx,
             },
         );
@@ -46,9 +46,10 @@ impl PluginInstance {
                 "wasm_minimal_protocol_send_result_to_host",
                 move |mut caller: Caller<PersistentData>, ptr: u32, len: u32| {
                     let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
-                    let mut buffer = vec![0u8; len as usize];
+                    let mut buffer = std::mem::take(&mut caller.data_mut().result_data);
+                    buffer.resize(len as usize, 0);
                     memory.read(&caller, ptr as _, &mut buffer).unwrap();
-                    caller.data_mut().result_data = String::from_utf8(buffer).unwrap();
+                    caller.data_mut().result_data = buffer;
                 },
             )
             .unwrap()
@@ -58,9 +59,7 @@ impl PluginInstance {
                 move |mut caller: Caller<PersistentData>, ptr: u32| {
                     let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
                     let buffer = std::mem::take(&mut caller.data_mut().arg_buffer);
-                    memory
-                        .write(&mut caller, ptr as _, buffer.as_bytes())
-                        .unwrap();
+                    memory.write(&mut caller, ptr as _, &buffer).unwrap();
                     caller.data_mut().arg_buffer = buffer;
                 },
             )
@@ -81,15 +80,11 @@ impl PluginInstance {
         Ok(Self { store, functions })
     }
 
-    pub fn write(&mut self, args: &[&str]) {
-        let mut all_args = String::new();
-        for arg in args {
-            all_args += arg;
-        }
-        self.store.data_mut().arg_buffer = all_args;
+    fn write(&mut self, args: &[&[u8]]) {
+        self.store.data_mut().arg_buffer = args.concat();
     }
 
-    pub fn call(&mut self, function: &str, args: &[&str]) -> Result<String, String> {
+    pub fn call(&mut self, function: &str, args: &[&[u8]]) -> Result<Vec<u8>, String> {
         self.write(args);
 
         let (_, function) = self
@@ -110,7 +105,10 @@ impl PluginInstance {
 
         match code[0] {
             Val::I32(0) => Ok(s),
-            Val::I32(1) => Err(format!("plugin errored with: {:?}", s)),
+            Val::I32(1) => Err(match String::from_utf8(s) {
+                Ok(err) => format!("plugin errored with: '{}'", err,),
+                Err(_) => String::from("plugin errored and did not return valid UTF-8"),
+            }),
             Val::I32(2) => Err("plugin panicked".to_string()),
             _ => Err("plugin did not respect the protocol".to_string()),
         }
