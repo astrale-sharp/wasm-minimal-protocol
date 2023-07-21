@@ -3,36 +3,36 @@ use wasm_minimal_protocol::*;
 initiate_protocol!();
 
 #[wasm_func]
-pub fn hello() -> String {
-    String::from("Hello from wasm!!!")
+pub fn hello() -> Vec<u8> {
+    b"Hello from wasm!!!".to_vec()
 }
 
 #[wasm_func]
-pub fn double_it(arg: &str) -> String {
-    format!("{}.{}", arg, arg)
+pub fn double_it(arg: &[u8]) -> Vec<u8> {
+    [arg, b".", arg].concat()
 }
 
 #[wasm_func]
-pub fn concatenate(arg1: &str, arg2: &str) -> String {
-    format!("{}*{}", arg1, arg2)
+pub fn concatenate(arg1: &[u8], arg2: &[u8]) -> Vec<u8> {
+    [arg1, b"*", arg2].concat()
 }
 
 #[wasm_func]
-pub fn shuffle(arg1: &str, arg2: &str, arg3: &str) -> String {
-    format!("{}-{}-{}", arg3, arg1, arg2)
+pub fn shuffle(arg1: &[u8], arg2: &[u8], arg3: &[u8]) -> Vec<u8> {
+    [arg3, b"-", arg1, b"-", arg2].concat()
 }
 
 #[wasm_func]
-pub fn returns_ok() -> Result<String, String> {
-    Ok(String::from("This is an `Ok`"))
+pub fn returns_ok() -> Result<Vec<u8>, String> {
+    Ok(b"This is an `Ok`".to_vec())
 }
 
 #[wasm_func]
-pub fn returns_err() -> Result<String, String> {
+pub fn returns_err() -> Result<Vec<u8>, String> {
     Err(String::from("This is an `Err`"))
 }
 
 #[wasm_func]
-pub fn will_panic() -> String {
+pub fn will_panic() -> Vec<u8> {
     panic!("unconditional panic")
 }
