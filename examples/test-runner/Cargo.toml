@@ -5,17 +5,11 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
-host-wasmer = {path = "../host-wasmer", optional = true }
-host-wasmtime = {path = "../host-wasmtime", optional = true }
-host-wasmi = {path = "../host-wasmi", optional = true }
+host-wasmi = { path = "../host-wasmi" }
 cfg-if = "1.0.0"
 
 
-
 [features]
-default = ["host-wasmi", "abi_unknown"]
-host-wasmer = ["dep:host-wasmer"]
-host-wasmtime = ["dep:host-wasmtime"]
-host-wasmi = ["dep:host-wasmi"]
+default = ["abi_unknown"]
 abi_unknown = []
 abi_wasi = []
