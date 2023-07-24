@@ -40,7 +40,8 @@ export fn concatenate(arg1_len: usize, arg2_len: usize) i32 {
 }
 
 export fn shuffle(arg1_len: usize, arg2_len: usize, arg3_len: usize) i32 {
-    var args = allocator.alloc(u8, arg1_len + arg2_len + arg3_len) catch return 1;
+    var args_len = arg1_len + arg2_len + arg3_len;
+    var args = allocator.alloc(u8, args_len) catch return 1;
     defer allocator.free(args);
     wasm_minimal_protocol_write_args_to_buffer(args.ptr);
 
@@ -48,9 +49,15 @@ export fn shuffle(arg1_len: usize, arg2_len: usize, arg3_len: usize) i32 {
     var arg2 = args[arg1_len .. arg1_len + arg2_len];
     var arg3 = args[arg1_len + arg2_len .. args.len];
 
-    var result = std.fmt.allocPrint(allocator, "{s}-{s}-{s}", .{ arg3, arg1, arg2 }) catch return 1;
-    defer allocator.free(result);
-    wasm_minimal_protocol_send_result_to_host(result.ptr, result.len);
+    var result: std.ArrayList(u8) = std.ArrayList(u8).initCapacity(allocator, args_len + 2) catch return 1;
+    defer result.deinit();
+    result.appendSlice(arg3) catch return 1;
+    result.append('-') catch return 1;
+    result.appendSlice(arg1) catch return 1;
+    result.append('-') catch return 1;
+    result.appendSlice(arg2) catch return 1;
+
+    wasm_minimal_protocol_send_result_to_host(result.items.ptr, result.items.len);
     return 0;
 }
 

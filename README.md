@@ -1,6 +1,6 @@
 # wasm-minimal-protocol
 
-A minimal protocol to send/receive strings from wasm.
+A minimal protocol to send/receive messages from wasm.
 Primarily developed to interface with the [typst language](https://typst.app/).
 
 ## You want to write a plugin
@@ -15,8 +15,8 @@ use wasm_minimal_protocol::*;
 initiate_protocol!();
 
 #[wasm_func]
-pub fn hello() -> String {
-    String::from("Hello from wasm!!!")
+pub fn hello() -> Vec<u8> {
+    b"Hello from wasm!!!".to_vec()
 }
 ```
 
