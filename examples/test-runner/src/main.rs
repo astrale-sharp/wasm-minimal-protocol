@@ -4,13 +4,6 @@
 use anyhow::Result;
 use std::process::Command;
 
-#[cfg(feature = "host-wasmtime")]
-use host_wasmtime::PluginInstance;
-
-#[cfg(feature = "host-wasmer")]
-use host_wasmer::PluginInstance;
-
-#[cfg(feature = "host-wasmi")]
 use host_wasmi::PluginInstance;
 
 #[cfg(feature = "abi_unknown")]
@@ -27,22 +20,6 @@ mod consts {
     pub const RUST_PATH: &str = "examples/hello_rust/target/wasm32-wasi/debug/hello.wasm";
     pub const ZIG_TARGET: &str = "wasm32-wasi";
 }
-
-#[cfg(any(
-    all(feature = "host-wasmtime", feature = "host-wasmer"),
-    all(feature = "host-wasmtime", feature = "host-wasmi"),
-    all(feature = "host-wasmer", feature = "host-wasmi"),
-))]
-compile_error!("Only one feature in [host-wasmtime, host-wasmi, host-wasmer] must be specified. host-wasmi is enabled by default.");
-
-#[cfg(not(any(
-    feature = "host-wasmtime",
-    feature = "host-wasmer",
-    feature = "host-wasmi"
-)))]
-compile_error!(
-    "At least one feature in [host-wasmtime, host-wasmi, host-wasmer] must be specified."
-);
 
 fn main() -> Result<()> {
     let mut custom_run = false;
@@ -114,6 +91,8 @@ fn main() -> Result<()> {
             )
         }
         "-i" | "--input" => {
+            #[cfg(feature = "abi_wasi")]
+            println!("The feature abi_wasi is enabled but the file tested is provided by you.\nThis feature influence how the examples are built, they have no effect here.");
             custom_run = true;
             println!("===");
             println!("getting wasm from: {}", args[1].as_str());

@@ -26,24 +26,23 @@ For others, the protocols is described in the file [protocol.md](./protocol.md).
 
 Examples are implemented in [Rust](examples/hello_rust/), [Zig](examples/hello_zig/) and [C](examples/hello_c/). Each of them is run using the [test-runner](examples/test-runner/).
 
-The example can run using [`wasmi`](https://github.com/paritytech/wasmi), [`wasmer`](https://github.com/wasmerio/wasmer) or [`wasmtime`](https://github.com/bytecodealliance/wasmtime).
+The example can run using [`wasmi`](https://github.com/paritytech/wasmi).
 
 The command to run examples (from the top-level directory) is:
 
 ```sh
 cargo run -- <lang>
 # or
-cargo run --no-default-features --features <host>,<abi> -- <lang>
+cargo run --no-default-features --features <abi> -- <lang>
 # or
 cargo run -- -i <PATH> <func> <args>
 # or
-cargo run --no-default-features --features <host>,<abi> -- -i <PATH> <func> <args>
+cargo run --no-default-features --features <abi> -- -i <PATH> <func> <args>
 ```
 
 Where:
 
 - `<lang>` is `rust`, `zig` or `c`
-- `<host>` is `host-wasmi`, `host-wasmtime` or `host-wasmer` (defaults to `host-wasmi`)
 - `<abi>` is `abi_unknown` or `abi_wasi` (defaults to `abi_unknown`)
 - `<PATH>` is the path to a wasm file
 - `<func>` is the exported function to call in the wasm file, with `<args>` as arguments
@@ -59,8 +58,9 @@ Where:
 ```sh
 cargo run -- rust # compile and run the Rust example
 cargo run -- zig # compile and run the Zig example
+# TODO irrelevant until next PR is merged
 # NOTE: this needs the abi_wasi feature, because the wasi functions are not stubbed. See the 'Tips' section to learn more.
-cargo run --no-default-features --features host-wasmtime,abi_wasi -- c # compile and run the C example
+cargo run -- c # compile and run the C example
 cargo run -- -i MY_WASM_FILE.wasm MY_FUNCTION arg1 arg2
 ```
 
