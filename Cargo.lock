@@ -148,6 +148,7 @@ dependencies = [
  "anyhow",
  "cfg-if",
  "host-wasmi",
+ "wasi-stub",
 ]
 
 [[package]]
