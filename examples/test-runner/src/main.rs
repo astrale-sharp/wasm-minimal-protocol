@@ -6,7 +6,7 @@ use std::process::Command;
 
 use host_wasmi::PluginInstance;
 
-#[cfg(feature = "abi_unknown")]
+#[cfg(not(feature = "wasi"))]
 mod consts {
     pub const RUST_TARGET: &str = "wasm32-unknown-unknown";
     pub const RUST_PATH: &str =
@@ -14,7 +14,7 @@ mod consts {
     pub const ZIG_TARGET: &str = "wasm32-freestanding";
 }
 
-#[cfg(feature = "abi_wasi")]
+#[cfg(feature = "wasi")]
 mod consts {
     pub const RUST_TARGET: &str = "wasm32-wasi";
     pub const RUST_PATH: &str = "examples/hello_rust/target/wasm32-wasi/debug/hello.wasm";
@@ -27,8 +27,9 @@ fn main() -> Result<()> {
     if args.is_empty() {
         anyhow::bail!("1 argument required: 'rust', 'zig' or 'c'")
     }
+    #[cfg(feature = "wasi")]
+    println!("The WASI functions will be stubbed (by `wasi-stub`) for this run");
     let plugin_binary = match args[0].as_str() {
-        #[cfg(any(feature = "abi_unknown", feature = "abi_wasi"))]
         "rust" => {
             println!("=== compiling the Rust plugin");
             Command::new("cargo")
@@ -42,7 +43,6 @@ fn main() -> Result<()> {
             println!("getting wasm from: {}", consts::RUST_PATH);
             std::fs::read(consts::RUST_PATH)?
         }
-        #[cfg(any(feature = "abi_unknown", feature = "abi_wasi"))]
         "zig" => {
             println!("=== compiling the Zig plugin");
             Command::new("zig")
@@ -62,10 +62,8 @@ fn main() -> Result<()> {
         }
         "c" => {
             println!("=== compiling the C plugin");
-            #[cfg(feature = "abi_unknown")]
-            println!("cfg(abi_unknown) has no effect for C example");
-            #[cfg(feature = "abi_wasi")]
-            println!("cfg(abi_wasi) has no effect for C example");
+            #[cfg(not(feature = "wasi"))]
+            eprintln!("WARNING: the C example should be compiled with `--features wasi`");
 
             println!("{}", std::env::current_dir().unwrap().display());
             Command::new("emcc")
@@ -83,16 +81,7 @@ fn main() -> Result<()> {
             println!("getting wasm from: examples/hello_c/hello.wasm");
             std::fs::read("examples/hello_c/hello.wasm")?
         }
-
-        #[cfg(not(any(feature = "abi_unknown", feature = "abi_wasi")))]
-        "rust" | "zig" => {
-            panic!(
-                "for testing rust or zig, you must enable one feature in [abi_unknown, abi_wasi]"
-            )
-        }
         "-i" | "--input" => {
-            #[cfg(feature = "abi_wasi")]
-            println!("The feature abi_wasi is enabled but the file tested is provided by you.\nThis feature influence how the examples are built, they have no effect here.");
             custom_run = true;
             println!("===");
             println!("getting wasm from: {}", args[1].as_str());
@@ -107,19 +96,28 @@ fn main() -> Result<()> {
         _ => anyhow::bail!("unknown argument '{}'", args[0].as_str()),
     };
 
+    #[cfg(feature = "wasi")]
+    let plugin_binary = wasi_stub::stub_wasi_functions(&plugin_binary)?;
+
     let mut plugin_instance = PluginInstance::new_from_bytes(plugin_binary).unwrap();
     if custom_run {
-        println!(
-            "{:?}",
-            plugin_instance.call(
-                args[2].as_str(),
-                args.iter()
-                    .skip(3)
-                    .map(|x| x.as_bytes())
-                    .collect::<Vec<_>>()
-                    .as_slice()
-            )
-        );
+        let function = args[2].as_str();
+        let args = args
+            .iter()
+            .skip(3)
+            .map(|x| x.as_bytes())
+            .collect::<Vec<_>>();
+        let result = match plugin_instance.call(function, &args) {
+            Ok(res) => res,
+            Err(err) => {
+                eprintln!("Error: {err}");
+                return Ok(());
+            }
+        };
+        match String::from_utf8(result) {
+            Ok(s) => println!("{s}"),
+            Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
+        }
         return Ok(());
     }
 
@@ -135,7 +133,7 @@ fn main() -> Result<()> {
         let result = match plugin_instance.call(function, args) {
             Ok(res) => res,
             Err(err) => {
-                println!("Error: {err}");
+                eprintln!("Error: {err}");
                 continue;
             }
         };
