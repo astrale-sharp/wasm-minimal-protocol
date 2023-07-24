@@ -1,7 +1,7 @@
 mod parser_to_encoder;
 
 use self::parser_to_encoder::ParserToEncoder as _;
-use wasmparser::{Import, Payload, Type, TypeRef};
+use wasmparser::{Import, Payload, StructuralType, SubType, TypeRef};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -16,7 +16,7 @@ pub fn stub_wasi_functions(binary: &[u8]) -> Result<Vec<u8>, Error> {
     let payloads = parser.parse_all(binary).collect::<Result<Vec<_>, _>>()?;
 
     let mut result = wasm_encoder::Module::new();
-    let mut types: Vec<Type> = Vec::new();
+    let mut types: Vec<SubType> = Vec::new();
     let mut to_stub: Vec<Import> = Vec::new();
     let mut code_section = wasm_encoder::CodeSection::new();
     let mut in_code_section = false;
@@ -75,7 +75,7 @@ pub fn stub_wasi_functions(binary: &[u8]) -> Result<Vec<u8>, Error> {
                 for f in &to_stub {
                     println!("found {}::{}: stubbing...", f.module, f.name);
                     let TypeRef::Func(ty) = f.ty else { continue };
-                    let Type::Func(function_type) = &types[ty as usize] else { continue };
+                    let StructuralType::Func(function_type) = &types[ty as usize].structural_type else { continue };
                     let locals = function_type
                         .params()
                         .iter()
