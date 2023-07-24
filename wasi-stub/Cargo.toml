@@ -7,3 +7,4 @@ authors = ["Arnaud Golfouse <arnaud.golfouse@laposte.net>"]
 [dependencies]
 wasm-encoder = "0.29.0"
 wasmparser = "0.107.0"
+thiserror = "1.0"
