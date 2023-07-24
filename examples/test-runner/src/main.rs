@@ -86,9 +86,9 @@ fn main() -> Result<()> {
         "c" => {
             println!("=== compiling the C plugin");
             #[cfg(feature = "abi_unknown")]
-            println!("cfg(abi_unknown) has now effect for C example");
+            println!("cfg(abi_unknown) has no effect for C example");
             #[cfg(feature = "abi_wasi")]
-            println!("cfg(abi_wasi) has now effect for C example");
+            println!("cfg(abi_wasi) has no effect for C example");
 
             println!("{}", std::env::current_dir().unwrap().display());
             Command::new("emcc")
@@ -136,7 +136,7 @@ fn main() -> Result<()> {
                 args[2].as_str(),
                 args.iter()
                     .skip(3)
-                    .map(|x| x.as_str())
+                    .map(|x| x.as_bytes())
                     .collect::<Vec<_>>()
                     .as_slice()
             )
@@ -144,19 +144,27 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    println!("{:?}", plugin_instance.call("hello", &[]));
-    println!("{:?}", plugin_instance.call("double_it", &["double me!!"]));
-    println!(
-        "{:?}",
-        plugin_instance.call("concatenate", &["val1", "value2"])
-    );
-    println!(
-        "{:?}",
-        plugin_instance.call("shuffle", &["value1", "value2", "value3"])
-    );
-    println!("{:?}", plugin_instance.call("returns_ok", &[]));
-    println!("{:?}", plugin_instance.call("returns_err", &[]));
-    println!("{:?}", plugin_instance.call("will_panic", &[]));
+    for (function, args) in [
+        ("hello", &[] as &[&[u8]]),
+        ("double_it", &[b"double me!!"]),
+        ("concatenate", &[b"val1", b"value2"]),
+        ("shuffle", &[b"value1", b"value2", b"value3"]),
+        ("returns_ok", &[]),
+        ("returns_err", &[]),
+        ("will_panic", &[]),
+    ] {
+        let result = match plugin_instance.call(function, args) {
+            Ok(res) => res,
+            Err(err) => {
+                println!("Error: {err}");
+                continue;
+            }
+        };
+        match String::from_utf8(result) {
+            Ok(s) => println!("{s}"),
+            Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
+        }
+    }
 
     Ok(())
 }

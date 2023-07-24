@@ -1,4 +1,4 @@
-This describes the protocol implemented in this crate. This protocol sends and receive strings with an host.
+This describes the protocol implemented in this crate. This protocol sends and receive byte slices with an host.
 
 Types and functions are described using WAT syntax.
 
@@ -16,11 +16,9 @@ Valid plugins need to import two functions (that will be provided by the runtime
 
   The argument is a pointer to a buffer (`ptr`).
 
-  Write the arguments for the current functions into the buffer pointed at by `ptr`.
+  Write the arguments for the current function into the buffer pointed at by `ptr`.
 
   Each function for the protocol receives lengths as its arguments (see [Exported functions](#exported-functions)). The capacity of the buffer pointed at by `ptr` should be at least the sum of all those lengths.
-
-  The written bytes are guaranteed to be valid UTF-8.
 
 - `(import "typst_env" "wasm_minimal_protocol_send_result_to_host" (func (param i32 i32)))`
 
@@ -28,7 +26,7 @@ Valid plugins need to import two functions (that will be provided by the runtime
 
   Reads `len` bytes pointed at by `ptr` into host memory. The memory pointed at by `ptr` can be freed immediately after this function returns.
 
-  The buffer should contain valid UTF-8.
+  If the message should be interpreted as an error message (see [Exported functions](#exported-functions)), it should be encoded as UTF-8.
 
 # Exported functions
 

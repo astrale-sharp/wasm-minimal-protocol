@@ -7,8 +7,8 @@ use wasmer_wasix::{generate_import_object_from_env, WasiEnv, WasiFunctionEnv};
 #[derive(Debug)]
 struct PersistentData {
     memory: Memory,
-    result_data: String,
-    arg_buffer: String,
+    result_data: Vec<u8>,
+    arg_buffer: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -29,8 +29,8 @@ impl PluginInstance {
             &mut store,
             PersistentData {
                 memory: dummy_memory,
-                result_data: String::new(),
-                arg_buffer: String::new(),
+                result_data: Vec::new(),
+                arg_buffer: Vec::new(),
             },
         );
         let wasi_env = WasiEnv::builder("test").build().unwrap();
@@ -49,10 +49,11 @@ impl PluginInstance {
                 &persistent_data,
                 |mut env: FunctionEnvMut<PersistentData>, ptr: u32, len: u32| {
                     let memory = env.data().memory.clone();
+                    let mut buffer = std::mem::take(&mut env.data_mut().result_data);
+                    buffer.resize(len as usize, 0);
                     let store = env.as_store_mut();
-                    let mut buffer = vec![0u8; len as usize];
                     memory.view(&store).read(ptr as u64, &mut buffer).unwrap();
-                    env.data_mut().result_data = String::from_utf8(buffer).unwrap();
+                    env.data_mut().result_data = buffer;
                 },
             ),
         );
@@ -67,7 +68,7 @@ impl PluginInstance {
                     let store = env.as_store_ref();
                     data.memory
                         .view(&store)
-                        .write(ptr as u64, data.arg_buffer.as_bytes())
+                        .write(ptr as u64, &data.arg_buffer)
                         .unwrap();
                 },
             ),
@@ -96,15 +97,11 @@ impl PluginInstance {
         })
     }
 
-    pub fn write(&mut self, args: &[&str]) {
-        let mut all_args = String::new();
-        for arg in args {
-            all_args += arg;
-        }
-        self.persistent_data.as_mut(&mut self.store).arg_buffer = all_args;
+    fn write(&mut self, args: &[&[u8]]) {
+        self.persistent_data.as_mut(&mut self.store).arg_buffer = args.concat();
     }
 
-    pub fn call(&mut self, function: &str, args: &[&str]) -> Result<String, String> {
+    pub fn call(&mut self, function: &str, args: &[&[u8]]) -> Result<Vec<u8>, String> {
         self.write(args);
 
         let (_, function) = self
@@ -127,11 +124,10 @@ impl PluginInstance {
 
         match code {
             Value::I32(0) => Ok(s),
-            Value::I32(1) => Err(format!(
-                "plugin errored with: {:?} with code: {}",
-                s,
-                code.i32().unwrap()
-            )),
+            Value::I32(1) => Err(match String::from_utf8(s) {
+                Ok(err) => format!("plugin errored with: '{}'", err,),
+                Err(_) => String::from("plugin errored and did not return valid UTF-8"),
+            }),
             Value::I32(2) => Err("plugin panicked".to_string()),
             _ => Err("plugin did not respect the protocol".to_string()),
         }

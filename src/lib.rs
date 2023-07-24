@@ -1,6 +1,6 @@
-//! Minimal protocol for sending/receiving string from and to a wasm host.
+//! Minimal protocol for sending/receiving messages from and to a wasm host.
 //!
-//! If you define a function accepting `n` strings (`&str`, not `String`), it will
+//! If you define a function accepting `n` arguments of type `&[u8]`, it will
 //! internally be exported as a function accepting `n` integers.
 //!
 //! # Example
@@ -11,8 +11,8 @@
 //! wasm_minimal_protocol::initiate_protocol!();
 //!
 //! #[wasm_func]
-//! fn concatenate(arg1: &str, arg2: &str) -> String {
-//!     format!("{}{}", arg1, arg2)
+//! fn concatenate(arg1: &[u8], arg2: &[u8]) -> Vec<u8> {
+//!     [arg1, arg2].concat()
 //! }
 //! ```
 
@@ -45,19 +45,19 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
             fn __write_args_to_buffer(ptr: *mut u8);
         }
 
-        trait __StringOrResultString {
+        trait __BytesOrResultBytes {
             type Err;
-            fn convert(self) -> ::std::result::Result<String, Self::Err>;
+            fn convert(self) -> ::std::result::Result<Vec<u8>, Self::Err>;
         }
-        impl __StringOrResultString for String {
-            type Err = String;
-            fn convert(self) -> ::std::result::Result<String, <Self as __StringOrResultString>::Err> {
+        impl __BytesOrResultBytes for Vec<u8> {
+            type Err = i32;
+            fn convert(self) -> ::std::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
                 Ok(self)
             }
         }
-        impl<E> __StringOrResultString for ::std::result::Result<String, E> {
+        impl<E> __BytesOrResultBytes for ::std::result::Result<Vec<u8>, E> {
             type Err = E;
-            fn convert(self) -> ::std::result::Result<String, <Self as __StringOrResultString>::Err> {
+            fn convert(self) -> ::std::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
                 self
             }
         }
@@ -74,14 +74,14 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
 ///
 /// # Arguments
 ///
-/// All the arguments of the function should be `&str`, without lifetimes.
+/// All the arguments of the function should be `&[u8]`, no lifetime needed.
 ///
 /// # Return type
 ///
-/// The return type of the function should be `String` or `Result<String, E>` where
+/// The return type of the function should be `Vec<u8>` or `Result<Vec<u8>, E>` where
 /// `E: ToString`.
 ///
-/// If the function return `String`, it will be implicitely wrapped in `Ok`.
+/// If the function return `Vec<u8>`, it will be implicitely wrapped in `Ok`.
 ///
 /// # Example
 ///
@@ -91,17 +91,17 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
 /// wasm_minimal_protocol::initiate_protocol!();
 ///
 /// #[wasm_func]
-/// fn function_one() -> String {
-///     String::new()
+/// fn function_one() -> Vec<u8> {
+///     Vec::new()
 /// }
 ///
 /// #[wasm_func]
-/// fn function_two(arg1: &str, arg2: &str) -> Result<String, i32> {
-///     Ok(String::from("Normal message"))
+/// fn function_two(arg1: &[u8], arg2: &[u8]) -> Result<Vec<u8>, i32> {
+///     Ok(b"Normal message".to_vec())
 /// }
 ///
 /// #[wasm_func]
-/// fn function_three(arg1: &str) -> Result<String, String> {
+/// fn function_three(arg1: &[u8]) -> Result<Vec<u8>, String> {
 ///     Err(String::from("Error message"))
 /// }
 /// ```
@@ -143,12 +143,12 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
             FnParam::Typed(p) => {
                 if p.ty.tokens.len() != 2
                     || p.ty.tokens[0].to_string() != "&"
-                    || p.ty.tokens[1].to_string() != "str"
+                    || p.ty.tokens[1].to_string() != "[u8]"
                 {
                     let p_to_string = p.ty.to_token_stream();
                     error = Some(venial::Error::new_at_tokens(
                         &p_to_string,
-                        format!("only parameter of type &str are allowed, not {p_to_string}"),
+                        format!("only parameters of type &[u8] are allowed, not {p_to_string}"),
                     ));
                     None
                 } else {
@@ -166,7 +166,6 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         let __total_len = #(#p_idx + )* 0;
         let mut __unsplit_params = vec![0u8; __total_len];
         unsafe { __write_args_to_buffer(__unsplit_params.as_mut_ptr()); }
-        let __unsplit_params = String::from_utf8(__unsplit_params).unwrap();
     );
     let mut set_args = quote!(
         let start: usize = 0;
@@ -176,7 +175,7 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         1 => {
             let arg = p.first().unwrap();
             set_args = quote!(
-                let #arg: &str = &__unsplit_params;
+                let #arg: &[u8] = &__unsplit_params;
             )
         }
         _ => {
@@ -194,7 +193,7 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 end = quote!(#end + #arg_idx);
                 let arg_name = &args[idx];
                 sets.push(quote!(
-                    let #arg_name: &str = &__unsplit_params[#start..#end];
+                    let #arg_name: &[u8] = &__unsplit_params[#start..#end];
                 ));
                 start = quote!(#start + #arg_idx)
             }
@@ -223,12 +222,12 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 #get_unsplit_params
                 #set_args
 
-                let result = __StringOrResultString::convert(#name(#(#p),*));
-                let (string, code) = match result {
+                let result = __BytesOrResultBytes::convert(#name(#(#p),*));
+                let (message, code) = match result {
                     Ok(s) => (s, 0),
-                    Err(err) => (err.to_string(), 1),
+                    Err(err) => (err.to_string().into_bytes(), 1),
                 };
-                unsafe { __send_result_to_host(string.as_ptr(), string.len()); }
+                unsafe { __send_result_to_host(message.as_ptr(), message.len()); }
                 code // indicates everything was successful
             }
         ))
