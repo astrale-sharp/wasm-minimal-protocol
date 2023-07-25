@@ -3,6 +3,14 @@
 A minimal protocol to send/receive messages from wasm.
 Primarily developed to interface with the [typst language](https://typst.app/).
 
+- [wasm-minimal-protocol](#wasm-minimal-protocol)
+  - [You want to write a plugin](#you-want-to-write-a-plugin)
+  - [Examples](#examples)
+    - [Dependencies](#dependencies)
+    - [Some commands](#some-commands)
+    - [Tips](#tips)
+  - [You need to stub a WebAssembly plugin](#you-need-to-stub-a-webassembly-plugin)
+
 ## You want to write a plugin
 
 A plugin can be written in Rust, C, Zig, or any language than compiles to WebAssembly.
@@ -66,6 +74,9 @@ cargo run -- -i MY_WASM_FILE.wasm MY_FUNCTION arg1 arg2
 
 ### Tips
 
-- `host-wasmi` does not support running with WASI (and thus `abi_wasi` will have no effects).
 - If the runner complains about missing definition for `wasi_snapshot_preview1` functions, try running your `.wasm` through [wasi-stub](./wasi-stub/). It stubs all wasi function in your wasm, so don't expect print or read_file to work anymore.
 - host-wasmi compiles fastest 😉
+
+## You need to stub a WebAssembly plugin
+
+We got you covered, take a look [here](wasi-stub/README.md)
