@@ -39,19 +39,15 @@ The example can run using [`wasmi`](https://github.com/paritytech/wasmi).
 The command to run examples (from the top-level directory) is:
 
 ```sh
-cargo run -- <lang>
+cargo run [--features wasi] -- <lang>
 # or
-cargo run --no-default-features --features <abi> -- <lang>
-# or
-cargo run -- -i <PATH> <func> <args>
-# or
-cargo run --no-default-features --features <abi> -- -i <PATH> <func> <args>
+cargo run [--features wasi] -- -i <PATH> <func> <args>
 ```
 
 Where:
 
 - `<lang>` is `rust`, `zig` or `c`
-- `<abi>` is `abi_unknown` or `abi_wasi` (defaults to `abi_unknown`)
+- add `wasi` to the list of features to compile the example with WASI (required on the C example) and stub all the resulting WASI function if the runner is `host-wasmi`.
 - `<PATH>` is the path to a wasm file
 - `<func>` is the exported function to call in the wasm file, with `<args>` as arguments
 
@@ -65,16 +61,16 @@ Where:
 
 ```sh
 cargo run -- rust # compile and run the Rust example
+cargo run --features wasi -- rust # compile and run the Rust example with WASI (stubbed)
 cargo run -- zig # compile and run the Zig example
-# TODO irrelevant until next PR is merged
-# NOTE: this needs the abi_wasi feature, because the wasi functions are not stubbed. See the 'Tips' section to learn more.
-cargo run -- c # compile and run the C example
+# NOTE: this needs the wasi feature, as `emcc` only compiles in WASI.
+cargo run --features wasi -- c # compile and run the C example
 cargo run -- -i MY_WASM_FILE.wasm MY_FUNCTION arg1 arg2
 ```
 
 ### Tips
 
-- If the runner complains about missing definition for `wasi_snapshot_preview1` functions, try running your `.wasm` through [wasi-stub](./wasi-stub/). It stubs all wasi function in your wasm, so don't expect print or read_file to work anymore.
+- `host-wasmi` does not support running with WASI, and will stub all WASI functions instead.
 - host-wasmi compiles fastest 😉
 
 ## You need to stub a WebAssembly plugin

@@ -5,11 +5,11 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
-host-wasmi = { path = "../host-wasmi" }
 cfg-if = "1.0.0"
+host-wasmi = { path = "../host-wasmi" }
+wasi-stub = { path = "../../wasi-stub", optional = true }
 
 
 [features]
-default = ["abi_unknown"]
-abi_unknown = []
-abi_wasi = []
+default = []
+wasi = ["dep:wasi-stub"]
