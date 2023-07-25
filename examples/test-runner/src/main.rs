@@ -28,7 +28,7 @@ fn main() -> Result<()> {
         anyhow::bail!("1 argument required: 'rust', 'zig' or 'c'")
     }
     #[cfg(feature = "wasi")]
-    println!("The WASI functions will be stubbed (by `wasi-stub`) for this run");
+    println!("[INFO] The WASI functions will be stubbed (by `wasi-stub`) for this run");
     let plugin_binary = match args[0].as_str() {
         "rust" => {
             println!("=== compiling the Rust plugin");
@@ -40,7 +40,7 @@ fn main() -> Result<()> {
                 .spawn()?
                 .wait()?;
             println!("===");
-            println!("getting wasm from: {}", consts::RUST_PATH);
+            println!("[INFO] getting wasm from: {}", consts::RUST_PATH);
             std::fs::read(consts::RUST_PATH)?
         }
         "zig" => {
@@ -57,7 +57,7 @@ fn main() -> Result<()> {
                 .expect("do you have zig installed and in the path?")
                 .wait()?;
             println!("===");
-            println!("getting wasm from: examples/hello_zig/hello.wasm");
+            println!("[INFO] getting wasm from: examples/hello_zig/hello.wasm");
             std::fs::read("examples/hello_zig/hello.wasm")?
         }
         "c" => {
@@ -78,13 +78,12 @@ fn main() -> Result<()> {
                 .expect("do you have emcc installed and in the path?")
                 .wait()?;
             println!("===");
-            println!("getting wasm from: examples/hello_c/hello.wasm");
+            println!("[INFO] getting wasm from: examples/hello_c/hello.wasm");
             std::fs::read("examples/hello_c/hello.wasm")?
         }
         "-i" | "--input" => {
             custom_run = true;
-            println!("===");
-            println!("getting wasm from: {}", args[1].as_str());
+            println!("[INFO] getting wasm from: {}", args[1].as_str());
             println!(
                 "running func: {}",
                 args.get(2)
@@ -97,7 +96,12 @@ fn main() -> Result<()> {
     };
 
     #[cfg(feature = "wasi")]
-    let plugin_binary = wasi_stub::stub_wasi_functions(&plugin_binary)?;
+    let plugin_binary = {
+        println!("[INFO] Using wasi-stub");
+        let res = wasi_stub::stub_wasi_functions(&plugin_binary)?;
+        println!("[INFO] WASI functions have been stubbed");
+        res
+    };
 
     let mut plugin_instance = PluginInstance::new_from_bytes(plugin_binary).unwrap();
     if custom_run {
