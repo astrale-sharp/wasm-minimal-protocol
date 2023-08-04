@@ -1,16 +1,57 @@
-use wasmi::{AsContext, Caller, Engine, Func as Function, Linker, Module, Value};
+use wasmi::{AsContext, Caller, Engine, Func as Function, Linker, Memory, Module, Value};
 
 type Store = wasmi::Store<PersistentData>;
 
+/// Reference to a slice of memory returned after
+/// [calling a wasm function](PluginInstance::call).
+///
+/// # Drop
+/// On [`Drop`], this will free the slice of memory inside the plugin.
+///
+/// As such, this structure mutably borrows the [`PluginInstance`], which prevents
+/// another function from being called.
+pub struct ReturnedData<'a> {
+    memory: Memory,
+    ptr: u32,
+    len: u32,
+    free_function: &'a Function,
+    context_mut: &'a mut Store,
+}
+
+impl<'a> ReturnedData<'a> {
+    /// Get a reference to the returned slice of data.
+    ///
+    /// # Panic
+    /// This may panic if the function returned an invalid `(ptr, len)` pair.
+    pub fn get(&self) -> &[u8] {
+        &self.memory.data(&*self.context_mut)[self.ptr as usize..(self.ptr + self.len) as usize]
+    }
+}
+
+impl Drop for ReturnedData<'_> {
+    fn drop(&mut self) {
+        self.free_function
+            .call(
+                &mut *self.context_mut,
+                &[Value::I32(self.ptr as _), Value::I32(self.len as _)],
+                &mut [],
+            )
+            .unwrap();
+    }
+}
+
 #[derive(Debug, Clone)]
 struct PersistentData {
-    result_data: Vec<u8>,
+    result_ptr: u32,
+    result_len: u32,
     arg_buffer: Vec<u8>,
 }
 
 #[derive(Debug)]
 pub struct PluginInstance {
     store: Store,
+    memory: Memory,
+    free_function: Function,
     functions: Vec<(String, Function)>,
 }
 
@@ -18,8 +59,9 @@ impl PluginInstance {
     pub fn new_from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, String> {
         let engine = Engine::default();
         let data = PersistentData {
-            result_data: Vec::new(),
             arg_buffer: Vec::new(),
+            result_ptr: 0,
+            result_len: 0,
         };
         let mut store = Store::new(&engine, data);
 
@@ -32,11 +74,8 @@ impl PluginInstance {
                 "typst_env",
                 "wasm_minimal_protocol_send_result_to_host",
                 move |mut caller: Caller<PersistentData>, ptr: u32, len: u32| {
-                    let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
-                    let mut buffer = std::mem::take(&mut caller.data_mut().result_data);
-                    buffer.resize(len as usize, 0);
-                    memory.read(&caller, ptr as _, &mut buffer).unwrap();
-                    caller.data_mut().result_data = buffer;
+                    caller.data_mut().result_ptr = ptr;
+                    caller.data_mut().result_len = len;
                 },
             )
             .unwrap()
@@ -56,21 +95,39 @@ impl PluginInstance {
             .start(&mut store)
             .map_err(|e| format!("{e}"))?;
 
+        let mut free_function = None;
         let functions = instance
             .exports(&store)
             .filter_map(|e| {
                 let name = e.name().to_owned();
-                e.into_func().map(|func| (name, func))
+
+                e.into_func().map(|func| {
+                    if name == "wasm_minimal_protocol_free_byte_buffer" {
+                        free_function = Some(func);
+                    }
+                    (name, func)
+                })
             })
             .collect::<Vec<_>>();
-        Ok(Self { store, functions })
+        let free_function = free_function.unwrap();
+        let memory = instance
+            .get_export(&store, "memory")
+            .unwrap()
+            .into_memory()
+            .unwrap();
+        Ok(Self {
+            store,
+            memory,
+            free_function,
+            functions,
+        })
     }
 
     fn write(&mut self, args: &[&[u8]]) {
         self.store.data_mut().arg_buffer = args.concat();
     }
 
-    pub fn call(&mut self, function: &str, args: &[&[u8]]) -> Result<Vec<u8>, String> {
+    pub fn call(&mut self, function: &str, args: &[&[u8]]) -> Result<ReturnedData, String> {
         self.write(args);
 
         let (_, function) = self
@@ -94,11 +151,19 @@ impl PluginInstance {
             code.first().cloned().unwrap_or(Value::I32(3)) // if the function returns nothing
         };
 
-        let s = std::mem::take(&mut self.store.data_mut().result_data);
+        let (ptr, len) = (self.store.data().result_ptr, self.store.data().result_len);
+
+        let result = ReturnedData {
+            memory: self.memory,
+            ptr,
+            len,
+            free_function: &self.free_function,
+            context_mut: &mut self.store,
+        };
 
         match code {
-            Value::I32(0) => Ok(s),
-            Value::I32(1) => Err(match String::from_utf8(s) {
+            Value::I32(0) => Ok(result),
+            Value::I32(1) => Err(match std::str::from_utf8(result.get()) {
                 Ok(err) => format!("plugin errored with: '{}'", err,),
                 Err(_) => String::from("plugin errored and did not return valid UTF-8"),
             }),
