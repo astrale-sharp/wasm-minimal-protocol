@@ -51,34 +51,6 @@ impl PluginInstance {
                 },
             )
             .unwrap()
-            // hack to accept wasi file
-            // https://github.com/near/wasi-stub is preferred
-            /*
-            .func_wrap(
-                "wasi_snapshot_preview1",
-                "fd_write",
-                |_: i32, _: i32, _: i32, _: i32| 0i32,
-            )
-            .unwrap()
-            .func_wrap(
-                "wasi_snapshot_preview1",
-                "environ_get",
-                |_: i32, _: i32| 0i32,
-            )
-            .unwrap()
-            .func_wrap(
-                "wasi_snapshot_preview1",
-                "environ_sizes_get",
-                |_: i32, _: i32| 0i32,
-            )
-            .unwrap()
-            .func_wrap(
-                "wasi_snapshot_preview1",
-                "proc_exit",
-                |_: i32| {},
-            )
-            .unwrap()
-            */
             .instantiate(&mut store, &module)
             .map_err(|e| format!("{e}"))?
             .start(&mut store)
