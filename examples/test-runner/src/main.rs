@@ -2,9 +2,8 @@
 // you need to build the hello example first
 
 use anyhow::Result;
-use std::process::Command;
-
 use host_wasmi::PluginInstance;
+use std::process::Command;
 
 #[cfg(not(feature = "wasi"))]
 mod consts {
@@ -118,7 +117,7 @@ fn main() -> Result<()> {
                 return Ok(());
             }
         };
-        match String::from_utf8(result) {
+        match std::str::from_utf8(result.get()) {
             Ok(s) => println!("{s}"),
             Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
         }
@@ -141,7 +140,7 @@ fn main() -> Result<()> {
                 continue;
             }
         };
-        match String::from_utf8(result) {
+        match std::str::from_utf8(result.get()) {
             Ok(s) => println!("{s}"),
             Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
         }
