@@ -17,7 +17,7 @@ export fn wasm_minimal_protocol_free_byte_buffer(ptr: [*]u8, len: usize) void {
 // ===
 
 export fn hello() i32 {
-    const message = "Hello world !";
+    const message = "Hello from wasm!!!";
     var result = allocator.alloc(u8, message.len) catch return 1;
     @memcpy(result, message);
     wasm_minimal_protocol_send_result_to_host(result.ptr, result.len);
