@@ -1,23 +1,36 @@
 const std = @import("std");
 const allocator = std.heap.page_allocator;
 
+// ===
+// Functions for the protocol
+
 extern "typst_env" fn wasm_minimal_protocol_send_result_to_host(ptr: [*]const u8, len: usize) void;
 extern "typst_env" fn wasm_minimal_protocol_write_args_to_buffer(ptr: [*]u8) void;
 
+export fn wasm_minimal_protocol_free_byte_buffer(ptr: [*]u8, len: usize) void {
+    var slice: []u8 = undefined;
+    slice.ptr = ptr;
+    slice.len = len;
+    allocator.free(slice);
+}
+
+// ===
+
 export fn hello() i32 {
     const message = "Hello world !";
-    wasm_minimal_protocol_send_result_to_host(message.ptr, message.len);
+    var result = allocator.alloc(u8, message.len) catch return 1;
+    @memcpy(result, message);
+    wasm_minimal_protocol_send_result_to_host(result.ptr, result.len);
     return 0;
 }
 
 export fn double_it(arg1_len: usize) i32 {
-    var alloc_result = allocator.alloc(u8, arg1_len * 2) catch return 1;
-    defer allocator.free(alloc_result);
-    wasm_minimal_protocol_write_args_to_buffer(alloc_result.ptr);
+    var result = allocator.alloc(u8, arg1_len * 2) catch return 1;
+    wasm_minimal_protocol_write_args_to_buffer(result.ptr);
     for (0..arg1_len) |i| {
-        alloc_result[i + arg1_len] = alloc_result[i];
+        result[i + arg1_len] = result[i];
     }
-    wasm_minimal_protocol_send_result_to_host(alloc_result.ptr, alloc_result.len);
+    wasm_minimal_protocol_send_result_to_host(result.ptr, result.len);
     return 0;
 }
 
@@ -27,7 +40,6 @@ export fn concatenate(arg1_len: usize, arg2_len: usize) i32 {
     wasm_minimal_protocol_write_args_to_buffer(args.ptr);
 
     var result = allocator.alloc(u8, arg1_len + arg2_len + 1) catch return 1;
-    defer allocator.free(result);
     for (0..arg1_len) |i| {
         result[i] = args[i];
     }
@@ -49,27 +61,30 @@ export fn shuffle(arg1_len: usize, arg2_len: usize, arg3_len: usize) i32 {
     var arg2 = args[arg1_len .. arg1_len + arg2_len];
     var arg3 = args[arg1_len + arg2_len .. args.len];
 
-    var result: std.ArrayList(u8) = std.ArrayList(u8).initCapacity(allocator, args_len + 2) catch return 1;
-    defer result.deinit();
-    result.appendSlice(arg3) catch return 1;
-    result.append('-') catch return 1;
-    result.appendSlice(arg1) catch return 1;
-    result.append('-') catch return 1;
-    result.appendSlice(arg2) catch return 1;
+    var result = allocator.alloc(u8, arg1_len + arg2_len + arg3_len + 2) catch return 1;
+    @memcpy(result[0..arg3.len], arg3);
+    result[arg3.len] = '-';
+    @memcpy(result[arg3.len + 1 ..][0..arg1.len], arg1);
+    result[arg3.len + arg1.len + 1] = '-';
+    @memcpy(result[arg3.len + arg1.len + 2 ..][0..arg2.len], arg2);
 
-    wasm_minimal_protocol_send_result_to_host(result.items.ptr, result.items.len);
+    wasm_minimal_protocol_send_result_to_host(result.ptr, result.len);
     return 0;
 }
 
 export fn returns_ok() i32 {
     const message = "This is an `Ok`";
-    wasm_minimal_protocol_send_result_to_host(message.ptr, message.len);
+    var result = allocator.alloc(u8, message.len) catch return 1;
+    @memcpy(result, message);
+    wasm_minimal_protocol_send_result_to_host(result.ptr, result.len);
     return 0;
 }
 
 export fn returns_err() i32 {
     const message = "This is an `Err`";
-    wasm_minimal_protocol_send_result_to_host(message.ptr, message.len);
+    var result = allocator.alloc(u8, message.len) catch return 1;
+    @memcpy(result, message);
+    wasm_minimal_protocol_send_result_to_host(result.ptr, result.len);
     return 1;
 }
 
