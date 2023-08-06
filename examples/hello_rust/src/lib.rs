@@ -9,7 +9,7 @@ pub fn hello() -> Vec<u8> {
 
 #[wasm_func]
 pub fn double_it(arg: &[u8]) -> Vec<u8> {
-    [arg, b".", arg].concat()
+    [arg, arg].concat()
 }
 
 #[wasm_func]

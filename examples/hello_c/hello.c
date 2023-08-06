@@ -30,7 +30,7 @@ EMSCRIPTEN_KEEPALIVE void wasm_minimal_protocol_free_byte_buffer(uint8_t *ptr,
 
 EMSCRIPTEN_KEEPALIVE
 int32_t hello(void) {
-  const char static_message[] = "Hello world !";
+  const char static_message[] = "Hello from wasm!!!";
   const size_t length = sizeof(static_message);
   char *message = malloc(length);
   memcpy((void *)message, (void *)static_message, length);
