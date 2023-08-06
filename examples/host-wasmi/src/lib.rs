@@ -123,23 +123,23 @@ impl PluginInstance {
         })
     }
 
-    fn write(&mut self, args: &[&[u8]]) {
-        self.store.data_mut().arg_buffer = args.concat();
-    }
-
-    pub fn call(&mut self, function: &str, args: &[&[u8]]) -> Result<ReturnedData, String> {
-        self.write(args);
+    pub fn call<'a>(
+        &mut self,
+        function: &str,
+        args: impl IntoIterator<Item = &'a [u8]>,
+    ) -> Result<ReturnedData, String> {
+        let mut result_args = Vec::new();
+        let arg_buffer = &mut self.store.data_mut().arg_buffer;
+        for arg in args {
+            result_args.push(Value::I32(arg.len() as _));
+            arg_buffer.extend_from_slice(arg);
+        }
 
         let (_, function) = self
             .functions
             .iter()
             .find(|(s, _)| s == function)
             .ok_or(format!("Plugin doesn't have the method: {function}"))?;
-
-        let result_args = args
-            .iter()
-            .map(|a| Value::I32(a.len() as _))
-            .collect::<Vec<_>>();
 
         let mut code = [Value::I32(2)];
         let is_err = function

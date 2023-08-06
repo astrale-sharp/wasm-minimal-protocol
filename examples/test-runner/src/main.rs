@@ -85,12 +85,8 @@ fn main() -> Result<()> {
     let mut plugin_instance = PluginInstance::new_from_bytes(plugin_binary).unwrap();
     if custom_run {
         let function = args[2].as_str();
-        let args = args
-            .iter()
-            .skip(3)
-            .map(|x| x.as_bytes())
-            .collect::<Vec<_>>();
-        let result = match plugin_instance.call(function, &args) {
+        let args = args.iter().skip(3).map(|x| x.as_bytes());
+        let result = match plugin_instance.call(function, args) {
             Ok(res) => res,
             Err(err) => {
                 eprintln!("Error: {err}");
@@ -113,7 +109,7 @@ fn main() -> Result<()> {
         ("returns_err", &[]),
         ("will_panic", &[]),
     ] {
-        let result = match plugin_instance.call(function, args) {
+        let result = match plugin_instance.call(function, args.iter().copied()) {
             Ok(res) => res,
             Err(err) => {
                 eprintln!("Error: {err}");
@@ -202,7 +198,7 @@ mod tests {
         function: &str,
         args: &[&[u8]],
     ) -> Result<String, String> {
-        match plugin_instance.call(function, args) {
+        match plugin_instance.call(function, args.iter().copied()) {
             Ok(res) => match std::str::from_utf8(res.get()) {
                 Ok(s) => Ok(s.to_owned()),
                 Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
