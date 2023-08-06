@@ -7,9 +7,9 @@ edition = "2021"
 anyhow = "1.0.71"
 cfg-if = "1.0.0"
 host-wasmi = { path = "../host-wasmi" }
-wasi-stub = { path = "../../wasi-stub", optional = true }
+wasi-stub = { path = "../../wasi-stub" }
 
 
 [features]
 default = []
-wasi = ["dep:wasi-stub"]
+wasi = []
