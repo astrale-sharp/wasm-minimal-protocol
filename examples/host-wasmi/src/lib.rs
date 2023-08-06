@@ -30,13 +30,15 @@ impl<'a> ReturnedData<'a> {
 
 impl Drop for ReturnedData<'_> {
     fn drop(&mut self) {
-        self.free_function
-            .call(
-                &mut *self.context_mut,
-                &[Value::I32(self.ptr as _), Value::I32(self.len as _)],
-                &mut [],
-            )
-            .unwrap();
+        if self.ptr != 0 {
+            self.free_function
+                .call(
+                    &mut *self.context_mut,
+                    &[Value::I32(self.ptr as _), Value::I32(self.len as _)],
+                    &mut [],
+                )
+                .unwrap();
+        }
     }
 }
 
@@ -128,8 +130,12 @@ impl PluginInstance {
         function: &str,
         args: impl IntoIterator<Item = &'a [u8]>,
     ) -> Result<ReturnedData, String> {
+        self.store.data_mut().result_ptr = 0;
+        self.store.data_mut().result_len = 0;
+
         let mut result_args = Vec::new();
         let arg_buffer = &mut self.store.data_mut().arg_buffer;
+        arg_buffer.clear();
         for arg in args {
             result_args.push(Value::I32(arg.len() as _));
             arg_buffer.extend_from_slice(arg);
@@ -139,20 +145,20 @@ impl PluginInstance {
             .functions
             .iter()
             .find(|(s, _)| s == function)
-            .ok_or(format!("Plugin doesn't have the method: {function}"))?;
+            .ok_or(format!("plugin doesn't have the method: {function}"))?;
 
-        let mut code = [Value::I32(2)];
-        let is_err = function
-            .call(&mut self.store, &result_args, &mut code)
-            .is_err();
-        let code = if is_err {
-            Value::I32(2)
-        } else {
-            code.first().cloned().unwrap_or(Value::I32(3)) // if the function returns nothing
-        };
+        let mut code = Value::I32(2);
+        let ty = function.ty(&self.store);
+        if ty.params().len() != result_args.len() {
+            return Err("incorrect number of arguments".to_string());
+        }
 
+        let call_result = function.call(
+            &mut self.store,
+            &result_args,
+            std::array::from_mut(&mut code),
+        );
         let (ptr, len) = (self.store.data().result_ptr, self.store.data().result_len);
-
         let result = ReturnedData {
             memory: self.memory,
             ptr,
@@ -161,13 +167,18 @@ impl PluginInstance {
             context_mut: &mut self.store,
         };
 
+        match call_result {
+            Ok(()) => {}
+            Err(wasmi::Error::Trap(_)) => return Err("plugin panicked".to_string()),
+            Err(_) => return Err("plugin did not respect the protocol".to_string()),
+        };
+
         match code {
             Value::I32(0) => Ok(result),
             Value::I32(1) => Err(match std::str::from_utf8(result.get()) {
                 Ok(err) => format!("plugin errored with: '{}'", err,),
                 Err(_) => String::from("plugin errored and did not return valid UTF-8"),
             }),
-            Value::I32(2) => Err("plugin panicked".to_string()),
             _ => Err("plugin did not respect the protocol".to_string()),
         }
     }
