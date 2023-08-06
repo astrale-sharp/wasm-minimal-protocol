@@ -8,9 +8,10 @@
 //! ```
 //! use wasm_minimal_protocol::wasm_func;
 //!
+//! #[cfg(target_arch = "wasm32")]
 //! wasm_minimal_protocol::initiate_protocol!();
 //!
-//! #[wasm_func]
+//! #[cfg_attr(target_arch = "wasm32", wasm_func)]
 //! fn concatenate(arg1: &[u8], arg2: &[u8]) -> Vec<u8> {
 //!     [arg1, arg2].concat()
 //! }
@@ -36,6 +37,16 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
     let mut result = quote!(
         #[cfg(not(target_arch = "wasm32"))]
         compile_error!("Error: this protocol may only be used when compiling to wasm architectures");
+
+        /// Safety: `data` and `len` should form a `Box`-allocated slice together,
+        /// ready to be dropped.
+        #[export_name = "wasm_minimal_protocol_free_byte_buffer"]
+        pub unsafe extern "C" fn __free_byte_buffer(data: u32, len: u32) {
+            let data = data as usize as *mut u8;
+            let len = len as usize;
+            let ptr_slice = ::std::ptr::slice_from_raw_parts_mut(data, len);
+            drop(::std::boxed::Box::from_raw(ptr_slice));
+        }
 
         #[link(wasm_import_module = "typst_env")]
         extern "C" {
@@ -88,19 +99,20 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
 /// ```
 /// use wasm_minimal_protocol::wasm_func;
 ///
+/// #[cfg(target_arch = "wasm32")]
 /// wasm_minimal_protocol::initiate_protocol!();
 ///
-/// #[wasm_func]
+/// #[cfg_attr(target_arch = "wasm32", wasm_func)]
 /// fn function_one() -> Vec<u8> {
 ///     Vec::new()
 /// }
 ///
-/// #[wasm_func]
+/// #[cfg_attr(target_arch = "wasm32", wasm_func)]
 /// fn function_two(arg1: &[u8], arg2: &[u8]) -> Result<Vec<u8>, i32> {
 ///     Ok(b"Normal message".to_vec())
 /// }
 ///
-/// #[wasm_func]
+/// #[cfg_attr(target_arch = "wasm32", wasm_func)]
 /// fn function_three(arg1: &[u8]) -> Result<Vec<u8>, String> {
 ///     Err(String::from("Error message"))
 /// }
@@ -218,17 +230,18 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         result.extend(quote!(
             #[export_name = #export_name]
-            #vis_marker fn #inner_name(#(#p_idx: usize),*) -> i32 {
+            #vis_marker extern "C" fn #inner_name(#(#p_idx: usize),*) -> i32 {
                 #get_unsplit_params
                 #set_args
 
                 let result = __BytesOrResultBytes::convert(#name(#(#p),*));
                 let (message, code) = match result {
-                    Ok(s) => (s, 0),
-                    Err(err) => (err.to_string().into_bytes(), 1),
+                    Ok(s) => (s.into_boxed_slice(), 0),
+                    Err(err) => (err.to_string().into_bytes().into_boxed_slice(), 1),
                 };
                 unsafe { __send_result_to_host(message.as_ptr(), message.len()); }
-                code // indicates everything was successful
+                ::std::mem::forget(message);
+                code
             }
         ))
     }
