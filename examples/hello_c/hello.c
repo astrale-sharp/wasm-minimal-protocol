@@ -21,19 +21,12 @@ PROTOCOL_FUNCTION void
 wasm_minimal_protocol_send_result_to_host(const uint8_t *ptr, size_t len);
 PROTOCOL_FUNCTION void wasm_minimal_protocol_write_args_to_buffer(uint8_t *ptr);
 
-EMSCRIPTEN_KEEPALIVE void wasm_minimal_protocol_free_byte_buffer(uint8_t *ptr,
-                                                                 size_t len) {
-  free(ptr);
-}
-
 // ===
 
 EMSCRIPTEN_KEEPALIVE
 int32_t hello(void) {
-  const char static_message[] = "Hello from wasm!!!";
-  const size_t length = sizeof(static_message);
-  char *message = malloc(length);
-  memcpy((void *)message, (void *)static_message, length);
+  const char message[] = "Hello from wasm!!!";
+  const size_t length = sizeof(message);
   wasm_minimal_protocol_send_result_to_host((uint8_t *)message, length - 1);
   return 0;
 }
@@ -41,15 +34,16 @@ int32_t hello(void) {
 EMSCRIPTEN_KEEPALIVE
 int32_t double_it(size_t arg_len) {
   size_t result_len = arg_len * 2;
-  uint8_t *alloc_result = (uint8_t *)malloc(result_len);
-  if (alloc_result == NULL) {
+  uint8_t *result = (uint8_t *)malloc(result_len);
+  if (result == NULL) {
     return 1;
   }
-  wasm_minimal_protocol_write_args_to_buffer(alloc_result);
+  wasm_minimal_protocol_write_args_to_buffer(result);
   for (size_t i = 0; i < arg_len; i++) {
-    alloc_result[arg_len + i] = alloc_result[i];
+    result[arg_len + i] = result[i];
   }
-  wasm_minimal_protocol_send_result_to_host(alloc_result, result_len);
+  wasm_minimal_protocol_send_result_to_host(result, result_len);
+  free(result);
   return 0;
 }
 
@@ -79,6 +73,7 @@ int32_t concatenate(size_t arg1_len, size_t arg2_len) {
 
   wasm_minimal_protocol_send_result_to_host(result, total_len + 1);
 
+  free(result);
   free(args);
   return 0;
 }
@@ -114,26 +109,23 @@ int32_t shuffle(size_t arg1_len, size_t arg2_len, size_t arg3_len) {
 
   wasm_minimal_protocol_send_result_to_host(result, result_len);
 
+  free(result);
   free(args);
   return 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t returns_ok() {
-  const char static_message[] = "This is an `Ok`";
-  const size_t length = sizeof(static_message);
-  char *message = malloc(length);
-  memcpy((void *)message, (void *)static_message, length);
+  const char message[] = "This is an `Ok`";
+  const size_t length = sizeof(message);
   wasm_minimal_protocol_send_result_to_host((uint8_t *)message, length - 1);
   return 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t returns_err() {
-  const char static_message[] = "This is an `Err`";
-  const size_t length = sizeof(static_message);
-  char *message = malloc(length);
-  memcpy((void *)message, (void *)static_message, length);
+  const char message[] = "This is an `Err`";
+  const size_t length = sizeof(message);
   wasm_minimal_protocol_send_result_to_host((uint8_t *)message, length - 1);
   return 1;
 }
