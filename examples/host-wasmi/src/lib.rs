@@ -1,204 +1,214 @@
-use wasmi::{AsContext, Caller, Engine, Func as Function, Linker, Memory, Module, Value};
+use std::fmt::{self, Debug, Formatter};
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
+use wasmi::{AsContext, AsContextMut, Caller, Engine, Linker, Module};
 
-type Store = wasmi::Store<PersistentData>;
+type Bytes = Vec<u8>;
 
-/// Reference to a slice of memory returned after
-/// [calling a wasm function](PluginInstance::call).
+/// A plugin loaded from WebAssembly code.
 ///
-/// # Drop
-/// On [`Drop`], this will free the slice of memory inside the plugin.
+/// It can run external code conforming to its protocol.
 ///
-/// As such, this structure mutably borrows the [`PluginInstance`], which prevents
-/// another function from being called.
-pub struct ReturnedData<'a> {
-    memory: Memory,
-    ptr: u32,
-    len: u32,
-    free_function: &'a Function,
-    context_mut: &'a mut Store,
+/// This type is cheap to clone and hash.
+#[derive(Clone)]
+pub struct Plugin(Arc<Repr>);
+
+/// The internal representation of a plugin.
+struct Repr {
+    /// The raw WebAssembly bytes.
+    bytes: Bytes,
+    /// The function defined by the WebAssembly module.
+    functions: Vec<(String, wasmi::Func)>,
+    /// Owns all data associated with the WebAssembly module.
+    store: Mutex<Store>,
 }
 
-impl<'a> ReturnedData<'a> {
-    /// Get a reference to the returned slice of data.
-    ///
-    /// # Panic
-    /// This may panic if the function returned an invalid `(ptr, len)` pair.
-    pub fn get(&self) -> &[u8] {
-        &self.memory.data(&*self.context_mut)[self.ptr as usize..(self.ptr + self.len) as usize]
-    }
+/// Owns all data associated with the WebAssembly module.
+type Store = wasmi::Store<StoreData>;
+
+/// The persistent store data used for communication between store and host.
+#[derive(Default)]
+struct StoreData {
+    args: Vec<Bytes>,
+    output: Vec<u8>,
 }
 
-impl Drop for ReturnedData<'_> {
-    fn drop(&mut self) {
-        if self.ptr != 0 {
-            self.free_function
-                .call(
-                    &mut *self.context_mut,
-                    &[Value::I32(self.ptr as _), Value::I32(self.len as _)],
-                    &mut [],
-                )
-                .unwrap();
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct PersistentData {
-    result_ptr: u32,
-    result_len: u32,
-    arg_buffer: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub struct PluginInstance {
-    store: Store,
-    memory: Memory,
-    free_function: Function,
-    functions: Vec<(String, Function)>,
-}
-
-impl PluginInstance {
-    pub fn new_from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self, String> {
+impl Plugin {
+    /// Create a new plugin from raw WebAssembly bytes.
+    pub fn new(bytes: Bytes) -> Result<Self, String> {
         let engine = Engine::default();
-        let data = PersistentData {
-            arg_buffer: Vec::new(),
-            result_ptr: 0,
-            result_len: 0,
-        };
-        let mut store = Store::new(&engine, data);
-
-        let module = Module::new(&engine, bytes.as_ref())
-            .map_err(|err| format!("Couldn't load module: {err}"))?;
+        let module = Module::new(&engine, bytes.as_slice())
+            .map_err(|err| format!("failed to load WebAssembly module: {err}"))?;
 
         let mut linker = Linker::new(&engine);
-        let instance = linker
+        linker
             .func_wrap(
                 "typst_env",
                 "wasm_minimal_protocol_send_result_to_host",
-                move |mut caller: Caller<PersistentData>, ptr: u32, len: u32| {
-                    caller.data_mut().result_ptr = ptr;
-                    caller.data_mut().result_len = len;
-                },
+                wasm_minimal_protocol_send_result_to_host,
             )
-            .unwrap()
+            .unwrap();
+        linker
             .func_wrap(
                 "typst_env",
                 "wasm_minimal_protocol_write_args_to_buffer",
-                move |mut caller: Caller<PersistentData>, ptr: u32| {
-                    let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
-                    let buffer = std::mem::take(&mut caller.data_mut().arg_buffer);
-                    memory.write(&mut caller, ptr as _, &buffer).unwrap();
-                    caller.data_mut().arg_buffer = buffer;
-                },
+                wasm_minimal_protocol_write_args_to_buffer,
             )
-            .unwrap()
+            .unwrap();
+
+        let mut store = Store::new(&engine, StoreData::default());
+        let instance = linker
             .instantiate(&mut store, &module)
-            .map_err(|e| format!("{e}"))?
-            .start(&mut store)
+            .and_then(|pre_instance| pre_instance.start(&mut store))
             .map_err(|e| format!("{e}"))?;
 
-        let mut free_function = None;
+        // Ensure that the plugin exports its memory.
+        if !matches!(
+            instance.get_export(&store, "memory"),
+            Some(wasmi::Extern::Memory(_))
+        ) {
+            return Err(String::from("plugin does not export its memory"));
+        }
+
+        // Collect exported functions.
         let functions = instance
             .exports(&store)
-            .filter_map(|e| {
-                let name = e.name().to_owned();
-
-                e.into_func().map(|func| {
-                    if name == "wasm_minimal_protocol_free_byte_buffer" {
-                        free_function = Some(func);
-                    }
-                    (name, func)
-                })
+            .filter_map(|export| {
+                let name = export.name().into();
+                export.into_func().map(|func| (name, func))
             })
-            .collect::<Vec<_>>();
-        let free_function = free_function.unwrap();
-        let memory = instance
-            .get_export(&store, "memory")
-            .unwrap()
-            .into_memory()
-            .unwrap();
-        Ok(Self {
-            store,
-            memory,
-            free_function,
+            .collect();
+
+        Ok(Plugin(Arc::new(Repr {
+            bytes,
             functions,
-        })
+            store: Mutex::new(store),
+        })))
     }
 
-    pub fn call<'a>(
-        &mut self,
-        function: &str,
-        args: impl IntoIterator<Item = &'a [u8]>,
-    ) -> Result<ReturnedData, String> {
-        self.store.data_mut().result_ptr = 0;
-        self.store.data_mut().result_len = 0;
-
-        let mut result_args = Vec::new();
-        let arg_buffer = &mut self.store.data_mut().arg_buffer;
-        arg_buffer.clear();
-        for arg in args {
-            result_args.push(Value::I32(arg.len() as _));
-            arg_buffer.extend_from_slice(arg);
-        }
-
-        let (_, function) = self
+    /// Call the plugin function with the given `name`.
+    pub fn call(&self, name: &str, args: Vec<Bytes>) -> Result<Bytes, String> {
+        // Find the function with the given name.
+        let func = self
+            .0
             .functions
             .iter()
-            .find(|(s, _)| s == function)
-            .ok_or(format!("plugin doesn't have the method: {function}"))?;
+            .find(|(v, _)| v == name)
+            .map(|&(_, func)| func)
+            .ok_or_else(|| format!("plugin does not contain a function called {name}"))?;
 
-        let mut code = Value::I32(2);
-        let ty = function.ty(&self.store);
-        if ty.params().len() != result_args.len() {
-            return Err("incorrect number of arguments".to_string());
+        let mut store = self.0.store.lock().unwrap();
+        let ty = func.ty(store.as_context());
+
+        // Check function signature.
+        if ty
+            .params()
+            .iter()
+            .any(|&v| v != wasmi::core::ValueType::I32)
+        {
+            return Err(format!(
+                "plugin function `{name}` has a parameter that is not a 32-bit integer"
+            ));
+        }
+        if ty.results() != [wasmi::core::ValueType::I32] {
+            return Err(format!(
+                "plugin function `{name}` does not return exactly one 32-bit integer"
+            ));
         }
 
-        let call_result = function.call(
-            &mut self.store,
-            &result_args,
-            std::array::from_mut(&mut code),
-        );
-        let (ptr, len) = (self.store.data().result_ptr, self.store.data().result_len);
-        let result = ReturnedData {
-            memory: self.memory,
-            ptr,
-            len,
-            free_function: &self.free_function,
-            context_mut: &mut self.store,
-        };
+        // Check inputs.
+        let expected = ty.params().len();
+        let given = args.len();
+        if expected != given {
+            return Err(format!(
+                "plugin function takes {expected} argument{}, but {given} {} given",
+                if expected == 1 { "" } else { "s" },
+                if given == 1 { "was" } else { "were" },
+            ));
+        }
 
-        match call_result {
-            Ok(()) => {}
-            Err(wasmi::Error::Trap(_)) => return Err("plugin panicked".to_string()),
-            Err(_) => return Err("plugin did not respect the protocol".to_string()),
-        };
+        // Collect the lengths of the argument buffers.
+        let lengths = args
+            .iter()
+            .map(|a| wasmi::Value::I32(a.len() as i32))
+            .collect::<Vec<_>>();
 
+        // Store the input data.
+        store.data_mut().args = args;
+
+        // Call the function.
+        let mut code = wasmi::Value::I32(-1);
+        func.call(
+            store.as_context_mut(),
+            &lengths,
+            std::slice::from_mut(&mut code),
+        )
+        .map_err(|err| format!("plugin panicked: {err}"))?;
+
+        // Extract the returned data.
+        let output = std::mem::take(&mut store.data_mut().output);
+
+        // Parse the functions return value.
         match code {
-            Value::I32(0) => Ok(result),
-            Value::I32(1) => Err(match std::str::from_utf8(result.get()) {
-                Ok(err) => format!("plugin errored with: '{}'", err,),
-                Err(_) => String::from("plugin errored and did not return valid UTF-8"),
-            }),
-            _ => Err("plugin did not respect the protocol".to_string()),
-        }
-    }
-
-    pub fn has_function(&self, method: &str) -> bool {
-        self.functions.iter().any(|(s, _)| s == method)
-    }
-
-    pub fn get_function(&self, function_name: &str) -> Option<Function> {
-        let Some((_, function)) = self.functions.iter().find(|(s, _)| s == function_name) else {
-            return None
+            wasmi::Value::I32(0) => {}
+            wasmi::Value::I32(1) => match std::str::from_utf8(&output) {
+                Ok(message) => return Err(format!("plugin errored with: {message}")),
+                Err(_) => {
+                    return Err(String::from(
+                        "plugin errored, but did not return a valid error message",
+                    ))
+                }
+            },
+            _ => return Err(String::from("plugin did not respect the protocol")),
         };
-        Some(*function)
+
+        Ok(output)
     }
 
-    pub fn iter_functions(&self) -> impl Iterator<Item = &String> {
-        self.functions.as_slice().iter().map(|(x, _)| x)
+    /// An iterator over all the function names defined by the plugin.
+    pub fn iter(&self) -> impl Iterator<Item = &str> {
+        self.0
+            .functions
+            .as_slice()
+            .iter()
+            .map(|(func_name, _)| func_name.as_str())
     }
+}
 
-    pub fn get_store(&self) -> &impl AsContext {
-        &self.store
+impl Debug for Plugin {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.pad("plugin(..)")
     }
+}
+
+impl PartialEq for Plugin {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.bytes == other.0.bytes
+    }
+}
+
+impl Hash for Plugin {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.bytes.hash(state);
+    }
+}
+
+/// Write the arguments to the plugin function into the plugin's memory.
+fn wasm_minimal_protocol_write_args_to_buffer(mut caller: Caller<StoreData>, ptr: u32) {
+    let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+    let arguments = std::mem::take(&mut caller.data_mut().args);
+    let mut offset = ptr as usize;
+    for arg in arguments {
+        memory.write(&mut caller, offset, arg.as_slice()).unwrap();
+        offset += arg.len();
+    }
+}
+
+/// Extracts the output of the plugin function from the plugin's memory.
+fn wasm_minimal_protocol_send_result_to_host(mut caller: Caller<StoreData>, ptr: u32, len: u32) {
+    let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+    let mut buffer = std::mem::take(&mut caller.data_mut().output);
+    buffer.resize(len as usize, 0);
+    memory.read(&caller, ptr as _, &mut buffer).unwrap();
+    caller.data_mut().output = buffer;
 }
