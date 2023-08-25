@@ -34,19 +34,15 @@ use venial::*;
 /// not take any arguments.
 #[proc_macro]
 pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
-    let mut result = quote!(
-        #[cfg(not(target_arch = "wasm32"))]
-        compile_error!("Error: this protocol may only be used when compiling to wasm architectures");
-
-        /// Safety: `data` and `len` should form a `Box`-allocated slice together,
-        /// ready to be dropped.
-        #[export_name = "wasm_minimal_protocol_free_byte_buffer"]
-        pub unsafe extern "C" fn __free_byte_buffer(data: u32, len: u32) {
-            let data = data as usize as *mut u8;
-            let len = len as usize;
-            let ptr_slice = ::std::ptr::slice_from_raw_parts_mut(data, len);
-            drop(::std::boxed::Box::from_raw(ptr_slice));
-        }
+    if !stream.is_empty() {
+        return quote!(
+            compile_error!("This macro does not take any arguments");
+        )
+        .into();
+    }
+    quote!(
+        // #[cfg(not(target_arch = "wasm32"))]
+        // compile_error!("Error: this protocol may only be used when compiling to wasm architectures");
 
         #[link(wasm_import_module = "typst_env")]
         extern "C" {
@@ -72,13 +68,7 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
                 self
             }
         }
-    );
-    if !stream.is_empty() {
-        result.extend(quote!(
-            compile_error!("This macro does not take any arguments");
-        ));
-    }
-    result.into()
+    ).into()
 }
 
 /// Wrap the function to be used with the [protocol!].
@@ -240,7 +230,6 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                     Err(err) => (err.to_string().into_bytes().into_boxed_slice(), 1),
                 };
                 unsafe { __send_result_to_host(message.as_ptr(), message.len()); }
-                ::std::mem::forget(message);
                 code
             }
         ))
