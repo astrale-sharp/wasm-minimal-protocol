@@ -2,7 +2,7 @@
 // you need to build the hello example first
 
 use anyhow::Result;
-use host_wasmi::PluginInstance;
+use host_wasmi::Plugin;
 use std::{path::Path, process::Command};
 
 const WASI: bool = {
@@ -82,10 +82,10 @@ fn main() -> Result<()> {
         };
     }
 
-    let mut plugin_instance = PluginInstance::new_from_bytes(plugin_binary).unwrap();
+    let plugin_instance = Plugin::new(plugin_binary).unwrap();
     if custom_run {
         let function = args[2].as_str();
-        let args = args.iter().skip(3).map(|x| x.as_bytes());
+        let args = args.iter().skip(3).map(|x| x.as_bytes().to_vec()).collect();
         let result = match plugin_instance.call(function, args) {
             Ok(res) => res,
             Err(err) => {
@@ -93,7 +93,7 @@ fn main() -> Result<()> {
                 return Ok(());
             }
         };
-        match std::str::from_utf8(result.get()) {
+        match std::str::from_utf8(&result) {
             Ok(s) => println!("{s}"),
             Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
         }
@@ -109,14 +109,15 @@ fn main() -> Result<()> {
         ("returns_err", &[]),
         ("will_panic", &[]),
     ] {
-        let result = match plugin_instance.call(function, args.iter().copied()) {
+        let result = match plugin_instance.call(function, args.iter().map(|a| a.to_vec()).collect())
+        {
             Ok(res) => res,
             Err(err) => {
                 eprintln!("Error: {err}");
                 continue;
             }
         };
-        match std::str::from_utf8(result.get()) {
+        match std::str::from_utf8(&result) {
             Ok(s) => println!("{s}"),
             Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
         }
@@ -194,12 +195,12 @@ mod tests {
     const ROOT_DIR: &str = "../..";
 
     fn run_function(
-        plugin_instance: &mut PluginInstance,
+        plugin_instance: &mut Plugin,
         function: &str,
         args: &[&[u8]],
     ) -> Result<String, String> {
-        match plugin_instance.call(function, args.iter().copied()) {
-            Ok(res) => match std::str::from_utf8(res.get()) {
+        match plugin_instance.call(function, args.iter().map(|a| a.to_vec()).collect()) {
+            Ok(res) => match std::str::from_utf8(&res) {
                 Ok(s) => Ok(s.to_owned()),
                 Err(_) => panic!("Error: function call '{function}' did not return UTF-8"),
             },
@@ -207,7 +208,7 @@ mod tests {
         }
     }
 
-    fn test_default_functions(plugin_instance: &mut PluginInstance) -> bool {
+    fn test_default_functions(plugin_instance: &mut Plugin) -> bool {
         let mut all_passed = true;
         for (function, args, expected) in [
             ("hello", &[] as &[&[u8]], Ok("Hello from wasm!!!")),
@@ -222,9 +223,13 @@ mod tests {
             (
                 "returns_err",
                 &[],
-                Err("plugin errored with: 'This is an `Err`'"),
+                Err("plugin errored with: This is an `Err`"),
             ),
-            ("will_panic", &[], Err("plugin panicked")),
+            (
+                "will_panic",
+                &[],
+                Err("plugin panicked: wasm `unreachable` instruction executed"),
+            ),
         ] {
             let res = run_function(plugin_instance, function, args);
             let res = res.as_ref().map(|s| s.as_str()).map_err(|s| s.as_str());
@@ -245,7 +250,7 @@ mod tests {
         let lock = LOCK.lock();
         let binary = compile_rust(false, ROOT_DIR)?;
         drop(lock);
-        let mut plugin_instance = PluginInstance::new_from_bytes(binary).unwrap();
+        let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");
         } else {
@@ -259,7 +264,7 @@ mod tests {
         let binary = compile_rust(true, ROOT_DIR)?;
         drop(lock);
         let binary = wasi_stub::stub_wasi_functions(&binary)?;
-        let mut plugin_instance = PluginInstance::new_from_bytes(binary).unwrap();
+        let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");
         } else {
@@ -272,7 +277,7 @@ mod tests {
         let lock = LOCK.lock();
         let binary = compile_zig(false, ROOT_DIR)?;
         drop(lock);
-        let mut plugin_instance = PluginInstance::new_from_bytes(binary).unwrap();
+        let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");
         } else {
@@ -286,7 +291,7 @@ mod tests {
         let binary = compile_zig(true, ROOT_DIR)?;
         drop(lock);
         let binary = wasi_stub::stub_wasi_functions(&binary)?;
-        let mut plugin_instance = PluginInstance::new_from_bytes(binary).unwrap();
+        let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");
         } else {
@@ -300,7 +305,7 @@ mod tests {
         let binary = compile_c(ROOT_DIR)?;
         drop(lock);
         let binary = wasi_stub::stub_wasi_functions(&binary)?;
-        let mut plugin_instance = PluginInstance::new_from_bytes(binary).unwrap();
+        let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");
         } else {
