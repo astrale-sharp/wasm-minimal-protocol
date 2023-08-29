@@ -27,7 +27,7 @@ EMSCRIPTEN_KEEPALIVE
 int32_t hello(void) {
   const char message[] = "Hello from wasm!!!";
   const size_t length = sizeof(message);
-  wasm_minimal_protocol_send_result_to_host((uint8_t *)message, length - 1);
+  wasm_minimal_protocol_send_result_to_host((const uint8_t *)message, length - 1);
   return 0;
 }
 
@@ -39,9 +39,7 @@ int32_t double_it(size_t arg_len) {
     return 1;
   }
   wasm_minimal_protocol_write_args_to_buffer(result);
-  for (size_t i = 0; i < arg_len; i++) {
-    result[arg_len + i] = result[i];
-  }
+  memcpy(result + arg_len, result, arg_len);
   wasm_minimal_protocol_send_result_to_host(result, result_len);
   free(result);
   return 0;
@@ -63,13 +61,9 @@ int32_t concatenate(size_t arg1_len, size_t arg2_len) {
   uint8_t *arg1 = args;
   uint8_t *arg2 = args + arg1_len;
 
-  for (size_t i = 0; i < arg1_len; i++) {
-    result[i] = arg1[i];
-  }
+  memcpy(result, arg1, arg1_len);
   result[arg1_len] = '*';
-  for (size_t i = 0; i < arg2_len; i++) {
-    result[arg1_len + 1 + i] = arg2[i];
-  }
+  memcpy(result + arg1_len + 1, arg2, arg2_len);
 
   wasm_minimal_protocol_send_result_to_host(result, total_len + 1);
 
@@ -95,17 +89,11 @@ int32_t shuffle(size_t arg1_len, size_t arg2_len, size_t arg3_len) {
   uint8_t *arg2 = args + arg1_len;
   uint8_t *arg3 = args + arg1_len + arg2_len;
 
-  for (size_t i = 0; i < arg3_len; i++) {
-    result[i] = arg3[i];
-  }
+  memcpy(result, arg3, arg3_len);
   result[arg3_len] = '-';
-  for (size_t i = 0; i < arg1_len; i++) {
-    result[arg3_len + 1 + i] = arg1[i];
-  }
-  result[arg3_len + arg1_len + 1] = '-';
-  for (size_t i = 0; i < arg2_len; i++) {
-    result[arg3_len + arg1_len + 2 + i] = arg2[i];
-  }
+  memcpy(result + arg3_len + 1, arg1, arg1_len);
+  result[arg3_len + 1 + arg1_len] = '-';
+  memcpy(result + arg3_len + 1 + arg1_len + 1, arg2, arg2_len);
 
   wasm_minimal_protocol_send_result_to_host(result, result_len);
 
@@ -118,7 +106,7 @@ EMSCRIPTEN_KEEPALIVE
 int32_t returns_ok() {
   const char message[] = "This is an `Ok`";
   const size_t length = sizeof(message);
-  wasm_minimal_protocol_send_result_to_host((uint8_t *)message, length - 1);
+  wasm_minimal_protocol_send_result_to_host((const uint8_t *)message, length - 1);
   return 0;
 }
 
@@ -126,9 +114,11 @@ EMSCRIPTEN_KEEPALIVE
 int32_t returns_err() {
   const char message[] = "This is an `Err`";
   const size_t length = sizeof(message);
-  wasm_minimal_protocol_send_result_to_host((uint8_t *)message, length - 1);
+  wasm_minimal_protocol_send_result_to_host((const uint8_t *)message, length - 1);
   return 1;
 }
 
 EMSCRIPTEN_KEEPALIVE
-int32_t will_panic() { exit(1); }
+int32_t will_panic() {
+  exit(1);
+}
