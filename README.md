@@ -68,6 +68,24 @@ cargo run --features wasi -- c # compile and run the C example
 cargo run -- -i MY_WASM_FILE.wasm MY_FUNCTION arg1 arg2
 ```
 
+If you wish to build the example directly, you may use the following commands:
+Here `|` indicate that you can choose between options, it's not the pipe operator.
+You need to remove the choices you don't want along with the `|` before executing the command.
+
+```sh
+# rust
+# from the directory examples/hello_rust
+cargo build --target wasm32-wasi|wasm32-unknown-unknown
+
+# zig
+# from the directory examples/hello_zig
+zig build-lib hello.zig -target wasm32-wasi|wasm32-freestanding -dynamic -rdynamic
+
+# C
+# from the directory examples/hello_c
+emcc --no-entry -s ERROR_ON_UNDEFINED_SYMBOLS=0 -o hello.wasm hello.c
+```
+
 ### Tips
 
 - `host-wasmi` does not support running with WASI, and will stub all WASI functions instead.
