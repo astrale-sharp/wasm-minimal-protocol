@@ -11,3 +11,7 @@ From the wasi-stub directory (where this README is), run `cargo install --path .
 ## How to use
 
 Once you installed wasi-stub, you can simply run `wasi-stub my_library.wasm` from the terminal.
+
+# Alternatives (?)
+
+Inspiration for this comes from [https://github.com/dicej/stubber]. It replaces stubbed functions with a trap.
