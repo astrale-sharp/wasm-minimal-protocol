@@ -22,7 +22,7 @@ fn main() -> Result<(), Error> {
         path,
         output_path,
         list,
-    } = parse_args::Args::new(std::env::args_os().skip(1))?;
+    } = parse_args::Args::new()?;
 
     let output = stub_wasi_functions(&binary)?;
 
