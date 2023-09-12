@@ -1,116 +1,254 @@
-mod parser_to_encoder;
+use std::collections::{HashMap, HashSet};
 
-use self::parser_to_encoder::ParserToEncoder as _;
-use wasmparser::{Import, Payload, StructuralType, SubType, TypeRef};
+use wast::{
+    core::{
+        Expression, Func, FuncKind, FunctionType, HeapType, InlineExport, Instruction, ItemKind,
+        Local, ModuleField, ModuleKind, RefType, TypeUse, ValType,
+    },
+    token::{Id, Index, NameAnnotation},
+    Wat,
+};
 
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum Error {
-    #[error("{0}")]
-    WasmParser(#[from] wasmparser::BinaryReaderError),
+enum FunctionsToStub {
+    All,
+    Some(HashSet<String>),
+}
+struct ShouldStub {
+    modules: HashMap<String, FunctionsToStub>,
 }
 
-pub fn stub_wasi_functions(binary: &[u8]) -> Result<Vec<u8>, Error> {
-    let parser = wasmparser::Parser::default();
-    wasmparser::validate(binary)?;
+enum ImportIndex {
+    ToStub(u32),
+    Keep(u32),
+}
 
-    let payloads = parser.parse_all(binary).collect::<Result<Vec<_>, _>>()?;
+struct ToStub {
+    fields_index: usize,
+    span: wast::token::Span,
+    nb_results: usize,
+    ty: TypeUse<'static, FunctionType<'static>>,
+    name: Option<NameAnnotation<'static>>,
+    id: Option<Id<'static>>,
+    locals: Vec<Local<'static>>,
+}
 
-    let mut result = wasm_encoder::Module::new();
-    let mut types: Vec<SubType> = Vec::new();
-    let mut to_stub: Vec<Import> = Vec::new();
-    let mut code_section = wasm_encoder::CodeSection::new();
-    let mut in_code_section = false;
-    let mut after_wasi = 0;
-    // let mut before_wasi = 0; // TODO
-
-    for payload in &payloads {
-        match payload {
-            Payload::TypeSection(type_section) => {
-                types = type_section
-                    .clone()
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>()?;
-                let (id, range) = payload.as_section().unwrap();
-                result.section(&wasm_encoder::RawSection {
-                    id,
-                    data: &binary[range],
-                });
+impl ShouldStub {
+    fn should_stub(&self, module: &str, function: &str) -> bool {
+        if let Some(functions) = self.modules.get(module) {
+            match functions {
+                FunctionsToStub::All => true,
+                FunctionsToStub::Some(functions) => functions.contains(function),
             }
-            Payload::ImportSection(import_section) => {
-                let mut imports = wasm_encoder::ImportSection::new();
-                let mut after_wasi_count = None;
-                for import in import_section.clone() {
-                    let import = import?;
-                    if import.module == "wasi_snapshot_preview1" {
-                        after_wasi_count = Some(0);
-                        to_stub.push(import);
-                    } else {
-                        if let Some(n) = after_wasi_count.as_mut() {
-                            *n += 1;
-                        } else {
-                            // before_wasi += 1;  // TODO
-                        }
-                        imports.import(import.module, import.name, import.ty.convert());
-                    }
-                }
-                after_wasi = after_wasi_count.unwrap_or(0);
-                result.section(&imports);
-            }
-            Payload::FunctionSection(f) => {
-                let mut functions_section = wasm_encoder::FunctionSection::new();
-                for f in &to_stub {
-                    let TypeRef::Func(ty) = f.ty else { continue };
-                    functions_section.function(ty);
-                }
-                for f in f.clone() {
-                    functions_section.function(f?);
-                }
-                result.section(&functions_section);
-            }
-            Payload::CodeSectionStart { .. } => {
-                // TODO: reorder the 'call' instructions in all other functions !
-                if after_wasi > 0 {
-                    panic!("this crate cannot handle 'wasi_preview' imports that happen after other imports")
-                }
-                for f in &to_stub {
-                    println!("found {}::{}: stubbing...", f.module, f.name);
-                    let TypeRef::Func(ty) = f.ty else { continue };
-                    let StructuralType::Func(function_type) = &types[ty as usize].structural_type else { continue };
-                    let locals = function_type
-                        .params()
-                        .iter()
-                        .map(|t| (1u32, t.convert()))
-                        .collect::<Vec<_>>();
-
-                    let mut function = wasm_encoder::Function::new(locals);
-                    if function_type.results().is_empty() {
-                        function.instruction(&wasm_encoder::Instruction::End);
-                    } else {
-                        function.instruction(&wasm_encoder::Instruction::I32Const(76));
-                        function.instruction(&wasm_encoder::Instruction::End);
-                    }
-                    code_section.function(&function);
-                }
-                in_code_section = true;
-            }
-            Payload::CodeSectionEntry(function_body) => {
-                code_section.raw(&binary[function_body.range()]);
-            }
-            _ => {
-                if in_code_section {
-                    result.section(&code_section);
-                    in_code_section = false;
-                }
-                if let Some((id, range)) = payload.as_section() {
-                    result.section(&wasm_encoder::RawSection {
-                        id,
-                        data: &binary[range],
-                    });
-                }
-            }
-        };
+        } else {
+            false
+        }
     }
-    let result = result.finish();
-    wasmparser::validate(&result)?;
-    Ok(result)
+}
+
+fn static_id(id: Option<Id>) -> Option<Id<'static>> {
+    id.map(|id| {
+        let mut name = id.name().to_owned();
+        name.insert(0, '$');
+        let parser = Box::leak(Box::new(
+            wast::parser::ParseBuffer::new(name.leak()).unwrap(),
+        ));
+        wast::parser::parse::<Id>(parser).unwrap()
+    })
+}
+fn static_name_annotation(name: Option<NameAnnotation>) -> Option<NameAnnotation<'static>> {
+    name.map(|name| NameAnnotation {
+        name: String::from(name.name).leak(),
+    })
+}
+
+pub fn stub_wasi_functions(binary: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let wat = wasmprinter::print_bytes(binary)?;
+    let parse_buffer = wast::parser::ParseBuffer::new(&wat)?;
+
+    let mut wat: Wat = wast::parser::parse(&parse_buffer)?;
+    let module = match &mut wat {
+        Wat::Module(m) => m,
+        Wat::Component(_) => {
+            anyhow::bail!("components are not supported")
+        }
+    };
+    let fields = match &mut module.kind {
+        ModuleKind::Text(f) => f,
+        ModuleKind::Binary(_) => {
+            println!("[WARNING] binary directives are not supported");
+            return Ok(binary.to_owned());
+        }
+    };
+
+    let mut types = Vec::new();
+    let mut imports = Vec::new();
+    let mut to_stub = Vec::new();
+    let should_stub = ShouldStub {
+        modules: [(String::from("wasi_snapshot_preview1"), FunctionsToStub::All)]
+            .into_iter()
+            .collect(),
+    };
+    let mut insert_stubs_index = None;
+    let mut new_import_indices = Vec::new();
+
+    for (field_idx, field) in fields.iter_mut().enumerate() {
+        match field {
+            ModuleField::Type(t) => types.push(t),
+            ModuleField::Import(i) => {
+                let typ = match &i.item.kind {
+                    ItemKind::Func(typ) => typ.index.and_then(|index| match index {
+                        Index::Num(index, _) => Some(index as usize),
+                        Index::Id(_) => None,
+                    }),
+                    _ => None,
+                };
+                let new_index = match typ {
+                    Some(type_index) if should_stub.should_stub(i.module, i.field) => {
+                        let typ = &types[type_index];
+                        let ty = TypeUse::new_with_index(Index::Num(type_index as u32, typ.span));
+                        let wast::core::TypeDef::Func(func_typ) = &typ.def else {
+                            continue;
+                        };
+                        let id = static_id(i.item.id);
+                        let locals: Vec<Local> = func_typ
+                            .params
+                            .iter()
+                            .map(|(id, name, val_type)| Local {
+                                id: static_id(*id),
+                                name: static_name_annotation(*name),
+                                ty: match val_type {
+                                    ValType::I32 => ValType::I32,
+                                    ValType::I64 => ValType::I64,
+                                    ValType::F32 => ValType::F32,
+                                    ValType::F64 => ValType::F64,
+                                    ValType::V128 => ValType::V128,
+                                    ValType::Ref(r) => ValType::Ref(RefType {
+                                        nullable: r.nullable,
+                                        heap: match r.heap {
+                                            HeapType::Func => HeapType::Func,
+                                            HeapType::Extern => HeapType::Extern,
+                                            HeapType::Any => HeapType::Any,
+                                            HeapType::Eq => HeapType::Eq,
+                                            HeapType::Struct => HeapType::Struct,
+                                            HeapType::Array => HeapType::Array,
+                                            HeapType::I31 => HeapType::I31,
+                                            HeapType::NoFunc => HeapType::NoFunc,
+                                            HeapType::NoExtern => HeapType::NoExtern,
+                                            HeapType::None => HeapType::None,
+                                            HeapType::Index(index) => {
+                                                HeapType::Index(match index {
+                                                    Index::Num(n, s) => Index::Num(n, s),
+                                                    Index::Id(id) => {
+                                                        Index::Id(static_id(Some(id)).unwrap())
+                                                    }
+                                                })
+                                            }
+                                        },
+                                    }),
+                                },
+                            })
+                            .collect();
+                        to_stub.push(ToStub {
+                            fields_index: field_idx,
+                            span: i.span,
+                            nb_results: func_typ.results.len(),
+                            ty,
+                            name: i.item.name.map(|n| NameAnnotation {
+                                name: n.name.to_owned().leak(),
+                            }),
+                            id,
+                            locals,
+                        });
+                        ImportIndex::ToStub(to_stub.len() as u32 - 1)
+                    }
+                    _ => {
+                        imports.push(i);
+                        ImportIndex::Keep(imports.len() as u32 - 1)
+                    }
+                };
+                new_import_indices.push(new_index);
+            }
+            ModuleField::Func(func) => {
+                if insert_stubs_index.is_none() {
+                    insert_stubs_index = Some(field_idx);
+                }
+                match &mut func.kind {
+                    FuncKind::Import(f) => {
+                        if should_stub.should_stub(f.module, f.field) {
+                            println!("[WARNING] Stubbing inline function is not yet supported");
+                            println!(
+                                "[WARNING] ignoring inline function \"{}\" \"{}\"",
+                                f.module, f.field
+                            );
+                        }
+                    }
+                    FuncKind::Inline { expression, .. } => {
+                        for inst in expression.instrs.as_mut().iter_mut() {
+                            match inst {
+                                Instruction::RefFunc(Index::Num(index, _))
+                                | Instruction::ReturnCall(Index::Num(index, _))
+                                | Instruction::Call(Index::Num(index, _)) => {
+                                    if let Some(new_index) = new_import_indices.get(*index as usize)
+                                    {
+                                        *index = match new_index {
+                                            ImportIndex::ToStub(idx) => *idx + imports.len() as u32,
+                                            ImportIndex::Keep(idx) => *idx,
+                                        };
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    drop(imports);
+    drop(types);
+
+    let insert_stubs_index = insert_stubs_index
+        .expect("This is weird: there are no code sections in this wasm executable !");
+
+    for (
+        already_stubbed,
+        ToStub {
+            fields_index,
+            span,
+            nb_results,
+            ty,
+            name,
+            id,
+            locals,
+        },
+    ) in to_stub.into_iter().enumerate()
+    {
+        let instructions = {
+            let mut res = Vec::with_capacity(nb_results);
+            for _ in 0..nb_results {
+                // Weird value, hopefully this makes it easier to track usage of these stubbed functions.
+                res.push(Instruction::I32Const(76));
+            }
+            res
+        };
+        let function = Func {
+            span,
+            id,
+            name,
+            // no exports
+            exports: InlineExport { names: Vec::new() },
+            kind: wast::core::FuncKind::Inline {
+                locals: locals.into_boxed_slice(),
+                expression: Expression {
+                    instrs: instructions.into_boxed_slice(),
+                },
+            },
+            ty,
+        };
+        fields.insert(insert_stubs_index, ModuleField::Func(function));
+        fields.remove(fields_index - already_stubbed);
+    }
+
+    Ok(module.encode()?)
 }
