@@ -76,7 +76,7 @@ fn main() -> Result<()> {
     if WASI {
         plugin_binary = {
             println!("[INFO] Using wasi-stub");
-            let res = wasi_stub::stub_wasi_functions(&plugin_binary)?;
+            let res = wasi_stub::stub_wasi_functions(&plugin_binary, Default::default())?;
             println!("[INFO] WASI functions have been stubbed");
             res
         };
@@ -263,7 +263,7 @@ mod tests {
         let lock = LOCK.lock();
         let binary = compile_rust(true, ROOT_DIR)?;
         drop(lock);
-        let binary = wasi_stub::stub_wasi_functions(&binary)?;
+        let binary = wasi_stub::stub_wasi_functions(&binary, Default::default())?;
         let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");
@@ -290,7 +290,7 @@ mod tests {
         let lock = LOCK.lock();
         let binary = compile_zig(true, ROOT_DIR)?;
         drop(lock);
-        let binary = wasi_stub::stub_wasi_functions(&binary)?;
+        let binary = wasi_stub::stub_wasi_functions(&binary, Default::default())?;
         let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");
@@ -304,7 +304,7 @@ mod tests {
         let lock = LOCK.lock();
         let binary = compile_c(ROOT_DIR)?;
         drop(lock);
-        let binary = wasi_stub::stub_wasi_functions(&binary)?;
+        let binary = wasi_stub::stub_wasi_functions(&binary, Default::default())?;
         let mut plugin_instance = Plugin::new(binary).unwrap();
         if !test_default_functions(&mut plugin_instance) {
             anyhow::bail!("Some incorrect result detected");

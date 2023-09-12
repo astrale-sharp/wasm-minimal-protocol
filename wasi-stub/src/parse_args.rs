@@ -4,12 +4,14 @@ use std::{
     ffi::OsString,
     path::PathBuf,
 };
+use wasi_stub::{FunctionsToStub, ShouldStub};
 
 pub(crate) struct Args {
     pub binary: Vec<u8>,
     pub path: PathBuf,
     pub output_path: Option<PathBuf>,
     pub list: bool,
+    pub should_stub: ShouldStub,
 }
 
 enum Arg {
@@ -161,7 +163,7 @@ impl TestArgParser {
                     } else {
                         println!("    [{name}]");
                     }
-                    println!("        {help}");
+                    Self::print_help(help);
                 }
                 _ => continue,
             }
@@ -173,11 +175,11 @@ impl TestArgParser {
                 Arg::Plain { .. } => continue,
                 Arg::LongFlag { name, help } => {
                     println!("    {name}");
-                    println!("        {help}");
+                    Self::print_help(help);
                 }
                 Arg::ShortFlag { flag, help } => {
                     println!("    -{flag}");
-                    println!("        {help}");
+                    Self::print_help(help);
                 }
                 Arg::KeyValue {
                     keys,
@@ -192,9 +194,18 @@ impl TestArgParser {
                         print!("{key}")
                     }
                     println!(" <{value_type}>");
-                    println!("        {help}");
+                    Self::print_help(help);
                 }
             }
+        }
+    }
+
+    fn print_help(help: &str) {
+        for line in help.lines() {
+            println!("        {line}");
+        }
+        if !help.contains('\n') {
+            println!();
         }
     }
 }
@@ -215,6 +226,21 @@ impl Args {
                     value_type: "PATH",
                     help: "Specify the output path.",
                 },
+                Arg::KeyValue {
+                    keys: &["--stub-module"],
+                    value_type: "STRING",
+                    help: "Stub the given module.
+You can also give a list of comma-separated modules.",
+                },
+                Arg::KeyValue {
+                    keys: &["--stub-function"],
+                    value_type: "STRING:STRING",
+                    help: "Stub the given function. It must have the format 'module:function'.
+Example:
+wasi-stub input.wasm --stub-function horrible_module:terrible_function
+
+Multiple functions can be given: simply separate them with commas (without whitespace).",
+                },
                 Arg::LongFlag {
                     name: "--list",
                     help: "List the functions to stub, but don't write anything.",
@@ -232,15 +258,47 @@ impl Args {
         let path = PathBuf::from(&arg_parser.plain_args["file"]);
         let list = arg_parser.long_flags.contains("--list");
         let mut output_path = None;
+        let mut should_stub = ShouldStub::default();
 
         if let Some(path) = arg_parser.key_values.get("--output") {
             output_path = Some(PathBuf::from(path));
         }
+        if let Some(stub_functions) = arg_parser.key_values.get("--stub-function") {
+            if let Some(stub_functions) = stub_functions.to_str() {
+                for function in stub_functions.split(',') {
+                    let (module, function) = match function.split_once(':') {
+                        Some((m, f)) => (m, f),
+                        None => return Err(format!("Malformed argument: {function}").into()),
+                    };
+                    let functions = should_stub
+                        .modules
+                        .entry(module.to_owned())
+                        .or_insert(FunctionsToStub::Some(HashSet::new()));
+                    match functions {
+                        FunctionsToStub::All => {}
+                        FunctionsToStub::Some(set) => {
+                            set.insert(function.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(stub_modules) = arg_parser.key_values.get("--stub-module") {
+            if let Some(stub_modules) = stub_modules.to_str() {
+                for module in stub_modules.split(',') {
+                    should_stub
+                        .modules
+                        .insert(module.to_owned(), FunctionsToStub::All);
+                }
+            }
+        }
+
         Ok(Self {
             binary: std::fs::read(&path)?,
             path,
             output_path,
             list,
+            should_stub,
         })
     }
 }
