@@ -104,6 +104,7 @@ pub fn stub_wasi_functions(binary: &[u8]) -> anyhow::Result<Vec<u8>> {
                 };
                 let new_index = match typ {
                     Some(type_index) if should_stub.should_stub(i.module, i.field) => {
+                        println!("Stubbing function {}::{}", i.module, i.field);
                         let typ = &types[type_index];
                         let ty = TypeUse::new_with_index(Index::Num(type_index as u32, typ.span));
                         let wast::core::TypeDef::Func(func_typ) = &typ.def else {
