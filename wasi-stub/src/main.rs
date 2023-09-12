@@ -22,9 +22,10 @@ fn main() -> Result<(), Error> {
         path,
         output_path,
         list,
-    } = parse_args::Args::new(std::env::args_os().skip(1))?;
+        should_stub,
+    } = parse_args::Args::new()?;
 
-    let output = stub_wasi_functions(&binary)?;
+    let output = stub_wasi_functions(&binary, should_stub)?;
 
     if !list {
         write_output(path, output_path, output)?;
