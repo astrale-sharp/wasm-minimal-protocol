@@ -121,6 +121,9 @@ pub fn stub_wasi_functions(binary: &[u8], should_stub: ShouldStub) -> anyhow::Re
                             .map(|(id, name, val_type)| Local {
                                 id: static_id(*id),
                                 name: static_name_annotation(*name),
+                                // FIXME: This long match dance is _only_ to make the lifetime of ty 'static. A lot of things have to go through this dance (see the `static_*` function...)
+                                // Instead, we should write the new function here, in place, by replacing `field`. This is currently done in the for loop at the veryend of this function.
+                                // THEN, at the end of the loop, swap every function in it's right place. No need to do more !
                                 ty: match val_type {
                                     ValType::I32 => ValType::I32,
                                     ValType::I64 => ValType::I64,
