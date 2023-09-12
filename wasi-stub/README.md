@@ -14,4 +14,4 @@ Once you installed wasi-stub, you can simply run `wasi-stub my_library.wasm` fro
 
 # Alternatives (?)
 
-Inspiration for this comes from [https://github.com/dicej/stubber]. It replaces stubbed functions with a trap.
+Inspiration for this comes from [https://github.com/dicej/stubber]. It replaces stubbed functions with a trap, while `wasi-stub` replaces them with functions that do nothing.
