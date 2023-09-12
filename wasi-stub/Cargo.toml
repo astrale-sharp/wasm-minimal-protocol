@@ -1,10 +1,10 @@
 [package]
 name = "wasi-stub"
 edition = "2021"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Arnaud Golfouse <arnaud.golfouse@laposte.net>"]
 
 [dependencies]
-wasm-encoder = "0.31.0"
-wasmparser = "0.109.0"
-thiserror = "1.0"
+anyhow = "1.0"
+wast = "64.0"
+wasmprinter = "0.2"
