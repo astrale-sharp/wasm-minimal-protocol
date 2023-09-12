@@ -9,12 +9,21 @@ use wast::{
     Wat,
 };
 
-enum FunctionsToStub {
+pub enum FunctionsToStub {
     All,
     Some(HashSet<String>),
 }
-struct ShouldStub {
-    modules: HashMap<String, FunctionsToStub>,
+pub struct ShouldStub {
+    pub modules: HashMap<String, FunctionsToStub>,
+}
+impl Default for ShouldStub {
+    fn default() -> Self {
+        Self {
+            modules: [(String::from("wasi_snapshot_preview1"), FunctionsToStub::All)]
+                .into_iter()
+                .collect(),
+        }
+    }
 }
 
 enum ImportIndex {
@@ -61,7 +70,7 @@ fn static_name_annotation(name: Option<NameAnnotation>) -> Option<NameAnnotation
     })
 }
 
-pub fn stub_wasi_functions(binary: &[u8]) -> anyhow::Result<Vec<u8>> {
+pub fn stub_wasi_functions(binary: &[u8], should_stub: ShouldStub) -> anyhow::Result<Vec<u8>> {
     let wat = wasmprinter::print_bytes(binary)?;
     let parse_buffer = wast::parser::ParseBuffer::new(&wat)?;
 
@@ -83,11 +92,6 @@ pub fn stub_wasi_functions(binary: &[u8]) -> anyhow::Result<Vec<u8>> {
     let mut types = Vec::new();
     let mut imports = Vec::new();
     let mut to_stub = Vec::new();
-    let should_stub = ShouldStub {
-        modules: [(String::from("wasi_snapshot_preview1"), FunctionsToStub::All)]
-            .into_iter()
-            .collect(),
-    };
     let mut insert_stubs_index = None;
     let mut new_import_indices = Vec::new();
 
