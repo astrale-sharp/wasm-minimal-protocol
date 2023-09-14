@@ -1,2 +1,5 @@
-hello.wasm
-hello.wasm.o
+/hello.wasm
+/hello.wasm.o
+/hello-wasi.wasm
+/hello-wasi.wasm.o
+/hello.pdf

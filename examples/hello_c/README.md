@@ -1,0 +1,21 @@
+# C wasm plugin example
+
+## Compile
+
+To compile this example, you need the [emcc compiler](https://emscripten.org/docs/tools_reference/emcc.html). Then, run the command
+
+```sh
+emcc --no-entry -s ERROR_ON_UNDEFINED_SYMBOLS=0 -o hello.wasm hello.c
+```
+
+Emcc always build with WASI, so we need to stub WASI functions:
+
+```sh
+pushd ../../wasi-stub
+cargo run -- ../examples/hello_c/hello.wasm -o ../examples/hello_c/hello.wasm
+popd
+```
+
+## Build with typst
+
+Simply run `typst compile hello.typ`, and observe that it works !
