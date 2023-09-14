@@ -28,7 +28,7 @@ pub fn hello() -> Vec<u8> {
 #assert(str(p.hello()) == "Hello from wasm!!!")
 ```
 
-For other languages, the protocols is described in the file [protocol.md](./protocol.md). You should also take a look at the [examples](#examples).
+For other languages, the protocol is described in the file [protocol.md](./protocol.md). You should also take a look at the [examples](#examples).
 
 ## Examples
 
