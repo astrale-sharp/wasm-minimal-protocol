@@ -70,7 +70,11 @@ fn static_name_annotation(name: Option<NameAnnotation>) -> Option<NameAnnotation
     })
 }
 
-pub fn stub_wasi_functions(binary: &[u8], should_stub: ShouldStub) -> anyhow::Result<Vec<u8>> {
+pub fn stub_wasi_functions(
+    binary: &[u8],
+    should_stub: ShouldStub,
+    return_value: u32,
+) -> anyhow::Result<Vec<u8>> {
     let wat = wasmprinter::print_bytes(binary)?;
     let parse_buffer = wast::parser::ParseBuffer::new(&wat)?;
 
@@ -236,7 +240,7 @@ pub fn stub_wasi_functions(binary: &[u8], should_stub: ShouldStub) -> anyhow::Re
             let mut res = Vec::with_capacity(nb_results);
             for _ in 0..nb_results {
                 // Weird value, hopefully this makes it easier to track usage of these stubbed functions.
-                res.push(Instruction::I32Const(76));
+                res.push(Instruction::I32Const(return_value as i32));
             }
             res
         };
