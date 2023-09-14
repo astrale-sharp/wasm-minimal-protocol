@@ -2,7 +2,7 @@
 
 ## Compile
 
-To compile this example, you need the [emcc compiler](https://emscripten.org/docs/tools_reference/emcc.html). Then, run the command
+To compile this example, you need the [emcc compiler](https://emscripten.org/docs/getting_started/downloads.html). Then, run the command
 
 ```sh
 emcc --no-entry -s ERROR_ON_UNDEFINED_SYMBOLS=0 -o hello.wasm hello.c
