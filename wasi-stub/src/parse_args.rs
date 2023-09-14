@@ -260,7 +260,11 @@ Multiple functions can be given: simply separate them with commas (without white
         let mut output_path = None;
         let mut should_stub = ShouldStub::default();
 
-        if let Some(path) = arg_parser.key_values.get("--output") {
+        if let Some(path) = arg_parser
+            .key_values
+            .get("--output")
+            .or(arg_parser.key_values.get("-o"))
+        {
             output_path = Some(PathBuf::from(path));
         }
         if let Some(stub_functions) = arg_parser.key_values.get("--stub-function") {
