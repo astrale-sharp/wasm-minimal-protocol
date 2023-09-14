@@ -13,7 +13,7 @@ zig build-lib hello.zig -target wasm32-freestanding -dynamic -rdynamic -O Releas
 If you want to build with WASI, use the `wasm32-wasi` target:
 
 ```sh
-zig build-lib hello.zig -target wasm32-wasi -dynamic -rdynamic -O ReleaseSmall -o hello-wasi.wasm
+zig build-lib hello.zig -target wasm32-wasi -dynamic -rdynamic -O ReleaseSmall -femit-bin=hello-wasi.wasm
 ```
 
 Then, stub the resulting binary:

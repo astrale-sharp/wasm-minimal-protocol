@@ -38,6 +38,8 @@ See the example for your language:
 - [Zig](examples/hello_zig/)
 - [C](examples/hello_c/)
 
+If you have all the required dependencies, you may build all examples by running `cargo test`.
+
 ## wasi-stub
 
 The runtime used by typst do not allow the plugin to import any function (beside the ones used by the protocol). In particular, if your plugin is compiled for [WASI](https://wasi.dev/), it will not be able to be loaded by typst.
