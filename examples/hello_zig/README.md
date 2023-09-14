@@ -2,7 +2,7 @@
 
 ## Compile
 
-To compile this example, you need the [zig compiler](https://ziglang.org/). Then, run the command
+To compile this example, you need the [zig compiler](https://ziglang.org/learn/getting-started/#installing-zig). Then, run the command
 
 ```sh
 zig build-lib hello.zig -target wasm32-freestanding -dynamic -rdynamic -O ReleaseSmall
