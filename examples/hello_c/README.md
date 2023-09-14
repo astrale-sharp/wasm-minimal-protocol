@@ -1,4 +1,6 @@
-# C wasm plugin example
+# C wasm plugin example
+
+This is a bare-bone typst plugin, written in C.
 
 ## Compile
 

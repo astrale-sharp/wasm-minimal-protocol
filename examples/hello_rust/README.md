@@ -1,4 +1,6 @@
-# Rust wasm plugin example
+# Rust wasm plugin example
+
+This is a bare-bone typst plugin, written in Rust. It uses the [wasm-minimal-protocol](../../) crate to easily define plugin functions.
 
 ## Compile
 
@@ -20,7 +22,7 @@ cp ./target/wasm32-unknown-unknown/release/hello.wasm ./
 If you want to build with WASI, use the `wasm32-wasi` target:
 
 ```sh
-rustup target add wasm32-wasi 
+rustup target add wasm32-wasi
 cargo build --release --target wasm32-wasi
 ```
 
