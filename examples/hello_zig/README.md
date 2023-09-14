@@ -1,4 +1,6 @@
-# Zig wasm plugin example
+# Zig wasm plugin example
+
+This is a bare-bone typst plugin, written in Zig.
 
 ## Compile
 
