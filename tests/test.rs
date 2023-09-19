@@ -17,6 +17,24 @@ fn wasi_stub(path: String) {
 }
 
 fn typst_compile(path: &str) {
+    let typst_version = Command::new("typst").arg("--version").output().unwrap();
+    if !typst_version.status.success() {
+        panic!("typst --version failed");
+    }
+    let version_string = match String::from_utf8(typst_version.stdout) {
+        Ok(s) => s,
+        Err(err) => panic!("failed to parse typst version: {err}"),
+    };
+    if let Some(s) = version_string.strip_prefix("typst ") {
+        let version = s.split('.').collect::<Vec<_>>();
+        let [major, minor, _] = version.as_slice() else {
+            panic!("failed to parse version string {version_string}")
+        };
+        if !(major.parse::<u64>().unwrap() >= 1 || minor.parse::<u64>().unwrap() >= 8) {
+            panic!("The typst version is too low for plugin: you need at least 0.8.0");
+        }
+    }
+
     let path = PathBuf::from(path).canonicalize().unwrap();
     let typst_compile = Command::new("typst")
         .arg("compile")
