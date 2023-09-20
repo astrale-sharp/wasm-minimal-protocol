@@ -12,6 +12,7 @@ pub(crate) struct Args {
     pub output_path: Option<PathBuf>,
     pub list: bool,
     pub should_stub: ShouldStub,
+    pub return_value: u32,
 }
 
 enum Arg {
@@ -241,6 +242,11 @@ wasi-stub input.wasm --stub-function horrible_module:terrible_function
 
 Multiple functions can be given: simply separate them with commas (without whitespace).",
                 },
+                Arg::KeyValue {
+                    keys: &["-r", "--return-value"],
+                    value_type: "INTEGER",
+                    help: "Make all stubbed function that return values return this number. By default, functions return 76."
+                },
                 Arg::LongFlag {
                     name: "--list",
                     help: "List the functions to stub, but don't write anything.",
@@ -259,8 +265,13 @@ Multiple functions can be given: simply separate them with commas (without white
         let list = arg_parser.long_flags.contains("--list");
         let mut output_path = None;
         let mut should_stub = ShouldStub::default();
+        let mut return_value: u32 = 76;
 
-        if let Some(path) = arg_parser.key_values.get("--output") {
+        if let Some(path) = arg_parser
+            .key_values
+            .get("--output")
+            .or(arg_parser.key_values.get("-o"))
+        {
             output_path = Some(PathBuf::from(path));
         }
         if let Some(stub_functions) = arg_parser.key_values.get("--stub-function") {
@@ -292,6 +303,16 @@ Multiple functions can be given: simply separate them with commas (without white
                 }
             }
         }
+        if let Some(value) = arg_parser
+            .key_values
+            .get("--return-value")
+            .or(arg_parser.key_values.get("-r"))
+        {
+            match value.to_str() {
+                Some(v) => return_value = v.parse()?,
+                None => return Err(format!("Invalid number: {value:?}").into()),
+            }
+        }
 
         Ok(Self {
             binary: std::fs::read(&path)?,
@@ -299,6 +320,7 @@ Multiple functions can be given: simply separate them with commas (without white
             output_path,
             list,
             should_stub,
+            return_value,
         })
     }
 }

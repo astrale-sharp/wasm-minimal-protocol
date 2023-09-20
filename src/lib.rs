@@ -16,13 +16,11 @@
 //!     [arg1, arg2].concat()
 //! }
 //! ```
-
-/// Documentation-only item, to describe the low-level protocol used by this crate.
-///
-#[cfg(doc)]
-#[doc = include_str!("../protocol.md")]
-#[proc_macro]
-pub fn protocol(stream: TokenStream) -> TokenStream {}
+//!
+//! # Protocol
+//!
+//! The specification of the protocol can be found in the typst documentation:
+//! <https://typst.app/docs/reference/foundations/plugin/>
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};

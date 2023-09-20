@@ -23,9 +23,10 @@ fn main() -> Result<(), Error> {
         output_path,
         list,
         should_stub,
+        return_value,
     } = parse_args::Args::new()?;
 
-    let output = stub_wasi_functions(&binary, should_stub)?;
+    let output = stub_wasi_functions(&binary, should_stub, return_value)?;
 
     if !list {
         write_output(path, output_path, output)?;
