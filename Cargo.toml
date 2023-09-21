@@ -12,6 +12,6 @@ default-members = [".", "./wasi-stub"]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.60"
-quote = "1.0.28"
+proc-macro2 = "1.0.36"
+quote = "1.0.15"
 venial = "0.5.0"
