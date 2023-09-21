@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+# backup Cargo.lock
+CARGO_LOCK_RESTORE_CONTENT=`cat Cargo.lock`
+
+restore_cargo_lock()
+{
+	echo "$CARGO_LOCK_RESTORE_CONTENT" > Cargo.lock
+}
+trap restore_cargo_lock EXIT
+
+cargo +nightly update -Zdirect-minimal-versions -p wasm-minimal-protocol --aggressive
+cargo test --no-run
+
+restore_cargo_lock
+cargo fmt --check
+cargo test
