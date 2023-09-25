@@ -20,7 +20,7 @@
 //! # Protocol
 //!
 //! The specification of the protocol can be found in the typst documentation:
-//! <https://typst.app/docs/reference/foundations/plugin/>
+//! <https://typst.app/docs/reference/foundations/plugin/#protocol>
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -69,7 +69,7 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
     ).into()
 }
 
-/// Wrap the function to be used with the [protocol](https://typst.app/docs/reference/foundations/plugin/).
+/// Wrap the function to be used with the [protocol](https://typst.app/docs/reference/foundations/plugin/#protocol).
 ///
 /// # Arguments
 ///
