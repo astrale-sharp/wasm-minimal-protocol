@@ -16,4 +16,5 @@ cargo test --no-run
 
 restore_cargo_lock
 cargo fmt --check
+cargo clippy --tests -- --D warnings
 cargo test
