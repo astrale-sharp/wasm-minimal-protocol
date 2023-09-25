@@ -69,7 +69,7 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
     ).into()
 }
 
-/// Wrap the function to be used with the [protocol!].
+/// Wrap the function to be used with the [protocol](https://typst.app/docs/reference/foundations/plugin/).
 ///
 /// # Arguments
 ///

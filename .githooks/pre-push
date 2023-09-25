@@ -17,4 +17,5 @@ cargo test --no-run
 restore_cargo_lock
 cargo fmt --check
 cargo clippy --tests -- --D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --document-private-items --no-deps
 cargo test
