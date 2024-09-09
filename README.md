@@ -6,7 +6,7 @@ Note that plugins require typst version `0.8` or more.
 
 ## You want to write a plugin
 
-A plugin can be written in Rust, C, Zig, or any language than compiles to WebAssembly.
+A plugin can be written in Rust, C, Zig, Go or any language than compiles to WebAssembly.
 
 Rust plugins can use this crate to automatically implement the protocol with a macro:
 
@@ -37,6 +37,7 @@ See the example for your language:
 - [Rust](examples/hello_rust/)
 - [Zig](examples/hello_zig/)
 - [C](examples/hello_c/)
+- [Go](examples/hello_go/)
 
 If you have all the required dependencies, you may build all examples by running `cargo test`.
 
