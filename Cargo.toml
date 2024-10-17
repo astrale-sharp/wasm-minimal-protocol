@@ -1,18 +1,4 @@
-[package]
-name = "wasm-minimal-protocol"
-version = "0.1.0"
-edition = "2021"
-license-file = "LICENSE"
-description = "Typst plugin helper macro library"
 [workspace]
 resolver = "2"
-members = [".", "./wasi-stub"]
-default-members = [".", "./wasi-stub"]
-
-[lib]
-proc-macro = true
-
-[dependencies]
-proc-macro2 = "1.0.36"
-quote = "1.0.15"
-venial = "0.5.0"
+members = ["crates/macro", "crates/wasi-stub"]
+default-members = ["crates/macro", "crates/wasi-stub"]
