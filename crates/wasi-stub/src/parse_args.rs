@@ -279,7 +279,9 @@ Multiple functions can be given: simply separate them with commas (without white
                 for function in stub_functions.split(',') {
                     let (module, function) = match function.split_once(':') {
                         Some((m, f)) => (m, f),
-                        None => return Err(Error::message(format!("Malformed argument: {function}"))),
+                        None => {
+                            return Err(Error::message(format!("Malformed argument: {function}")))
+                        }
                     };
                     let functions = should_stub
                         .modules
