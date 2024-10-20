@@ -254,7 +254,7 @@ Multiple functions can be given: simply separate them with commas (without white
             ],
         );
 
-        arg_parser.parse()?;
+        arg_parser.parse().map_err(Error::message)?;
 
         if arg_parser.requested_help {
             arg_parser.print_help_message();
@@ -279,7 +279,9 @@ Multiple functions can be given: simply separate them with commas (without white
                 for function in stub_functions.split(',') {
                     let (module, function) = match function.split_once(':') {
                         Some((m, f)) => (m, f),
-                        None => return Err(format!("Malformed argument: {function}").into()),
+                        None => {
+                            return Err(Error::message(format!("Malformed argument: {function}")))
+                        }
                     };
                     let functions = should_stub
                         .modules
@@ -310,7 +312,7 @@ Multiple functions can be given: simply separate them with commas (without white
         {
             match value.to_str() {
                 Some(v) => return_value = v.parse()?,
-                None => return Err(format!("Invalid number: {value:?}").into()),
+                None => return Err(Error::message(format!("Invalid number: {value:?}"))),
             }
         }
 
