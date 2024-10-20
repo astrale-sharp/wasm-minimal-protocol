@@ -44,6 +44,6 @@ If you have all the required dependencies, you may build all examples by running
 
 The runtime used by typst do not allow the plugin to import any function (beside the ones used by the protocol). In particular, if your plugin is compiled for [WASI](https://wasi.dev/), it will not be able to be loaded by typst.
 
-To get around that, you can use [wasi-stub](./wasi-stub). It will detect all WASI-related imports, and replace them by stubs that do nothing.
+To get around that, you can use [wasi-stub](./crates/wasi-stub). It will detect all WASI-related imports, and replace them by stubs that do nothing.
 
 If you are compiling C code with `emcc`, stubbing is almost certainly required.
