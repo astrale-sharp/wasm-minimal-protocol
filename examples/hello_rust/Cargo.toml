@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-minimal-protocol = { path = "../../" }
+wasm-minimal-protocol = { path = "../../crates/macro" }
 
 
 [profile.release]
