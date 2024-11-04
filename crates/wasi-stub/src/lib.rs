@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use wast::{
     core::{
         Expression, Func, FuncKind, FunctionType, HeapType, InlineExport, Instruction, ItemKind,
-        Local, ModuleField, ModuleKind, RefType, TypeUse, ValType,
+        Local, ModuleField, ModuleKind, RefType, TypeUse, ValType, InnerTypeKind,
     },
     token::{Id, Index, NameAnnotation},
     Wat,
@@ -115,7 +115,7 @@ pub fn stub_wasi_functions(
                         println!("Stubbing function {}::{}", i.module, i.field);
                         let typ = &types[type_index];
                         let ty = TypeUse::new_with_index(Index::Num(type_index as u32, typ.span));
-                        let wast::core::TypeDef::Func(func_typ) = &typ.def else {
+                        let wast::core::TypeDef{kind: InnerTypeKind::Func(func_typ), ..} = &typ.def else {
                             continue;
                         };
                         let id = static_id(i.item.id);
@@ -137,24 +137,15 @@ pub fn stub_wasi_functions(
                                     ValType::Ref(r) => ValType::Ref(RefType {
                                         nullable: r.nullable,
                                         heap: match r.heap {
-                                            HeapType::Func => HeapType::Func,
-                                            HeapType::Extern => HeapType::Extern,
-                                            HeapType::Any => HeapType::Any,
-                                            HeapType::Eq => HeapType::Eq,
-                                            HeapType::Struct => HeapType::Struct,
-                                            HeapType::Array => HeapType::Array,
-                                            HeapType::I31 => HeapType::I31,
-                                            HeapType::NoFunc => HeapType::NoFunc,
-                                            HeapType::NoExtern => HeapType::NoExtern,
-                                            HeapType::None => HeapType::None,
-                                            HeapType::Index(index) => {
-                                                HeapType::Index(match index {
+                                            HeapType::Concrete(index) => {
+                                                HeapType::Concrete(match index {
                                                     Index::Num(n, s) => Index::Num(n, s),
                                                     Index::Id(id) => {
                                                         Index::Id(static_id(Some(id)).unwrap())
                                                     }
                                                 })
                                             }
+                                            HeapType::Abstract { shared, ty } => HeapType::Abstract { shared, ty },
                                         },
                                     }),
                                 },
@@ -254,6 +245,8 @@ pub fn stub_wasi_functions(
                 locals: locals.into_boxed_slice(),
                 expression: Expression {
                     instrs: instructions.into_boxed_slice(),
+                    branch_hints: Box::new([]),
+                    instr_spans: None,
                 },
             },
             ty,
