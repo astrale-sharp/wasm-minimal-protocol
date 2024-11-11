@@ -8,7 +8,7 @@ fn wasi_stub(path: String) {
         .arg(&path)
         .arg("-o")
         .arg(&path)
-        .current_dir("wasi-stub")
+        .current_dir("../wasi-stub")
         .status()
         .unwrap();
     if !wasi_stub.success() {
@@ -49,7 +49,7 @@ fn typst_compile(path: &str) {
 
 #[test]
 fn test_c() {
-    let dir_path = "examples/hello_c/".to_string();
+    let dir_path = "../../examples/hello_c/".to_string();
     let build_c = Command::new("emcc")
         .arg("--no-entry")
         .arg("-O3")
@@ -70,7 +70,7 @@ fn test_c() {
 
 #[test]
 fn test_rust() {
-    let dir_path = "examples/hello_rust/".to_string();
+    let dir_path = "../../examples/hello_rust/".to_string();
     let build_rust = Command::new("cargo")
         .arg("build")
         .arg("--release")
@@ -94,13 +94,13 @@ fn test_rust() {
         panic!("Compiling with cargo failed");
     }
     std::fs::copy(
-        "examples/hello_rust/target/wasm32-unknown-unknown/release/hello.wasm",
-        "examples/hello_rust/hello.wasm",
+        "../../examples/hello_rust/target/wasm32-unknown-unknown/release/hello.wasm",
+        "../../examples/hello_rust/hello.wasm",
     )
     .unwrap();
     std::fs::copy(
-        "examples/hello_rust/target/wasm32-wasi/release/hello.wasm",
-        "examples/hello_rust/hello-wasi.wasm",
+        "../../examples/hello_rust/target/wasm32-wasi/release/hello.wasm",
+        "../../examples/hello_rust/hello-wasi.wasm",
     )
     .unwrap();
     wasi_stub(dir_path.clone() + "hello-wasi.wasm");
@@ -109,7 +109,7 @@ fn test_rust() {
 
 #[test]
 fn test_zig() {
-    let dir_path = "examples/hello_zig/".to_string();
+    let dir_path = "../../examples/hello_zig/".to_string();
     let build_zig = Command::new("zig")
         .arg("build-lib")
         .arg("hello.zig")
