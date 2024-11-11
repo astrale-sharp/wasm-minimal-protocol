@@ -1,22 +1,9 @@
 mod parse_args;
 
 use std::path::PathBuf;
-use wasi_stub::stub_wasi_functions;
+use wasi_stub::{stub_wasi_functions, Error, Result};
 
-// Error handling
-struct Error(Box<dyn std::fmt::Display>);
-impl std::fmt::Debug for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.0, f)
-    }
-}
-impl<E: std::fmt::Display + 'static> From<E> for Error {
-    fn from(err: E) -> Self {
-        Self(Box::new(err))
-    }
-}
-
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     let parse_args::Args {
         binary,
         path,
@@ -37,7 +24,7 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn write_output(path: PathBuf, output_path: Option<PathBuf>, output: Vec<u8>) -> Result<(), Error> {
+fn write_output(path: PathBuf, output_path: Option<PathBuf>, output: Vec<u8>) -> Result<()> {
     let output_path = match output_path {
         Some(p) => p,
         // Try to find an unused output path

@@ -92,7 +92,6 @@ dependencies = [
 name = "wasi-stub"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "wasmprinter",
  "wast",
 ]

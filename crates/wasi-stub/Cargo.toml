@@ -5,6 +5,5 @@ version = "0.2.0"
 authors = ["Arnaud Golfouse <arnaud.golfouse@laposte.net>"]
 
 [dependencies]
-anyhow = "1.0"
 wast = "65.0"
 wasmprinter = "0.2"
