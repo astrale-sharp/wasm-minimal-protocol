@@ -52,17 +52,17 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
 
         trait __BytesOrResultBytes {
             type Err;
-            fn convert(self) -> ::std::result::Result<Vec<u8>, Self::Err>;
+            fn convert(self) -> ::core::result::Result<Vec<u8>, Self::Err>;
         }
         impl __BytesOrResultBytes for Vec<u8> {
             type Err = i32;
-            fn convert(self) -> ::std::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
+            fn convert(self) -> ::core::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
                 Ok(self)
             }
         }
-        impl<E> __BytesOrResultBytes for ::std::result::Result<Vec<u8>, E> {
+        impl<E> __BytesOrResultBytes for ::core::result::Result<Vec<u8>, E> {
             type Err = E;
-            fn convert(self) -> ::std::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
+            fn convert(self) -> ::core::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
                 self
             }
         }
