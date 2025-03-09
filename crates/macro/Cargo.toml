@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license-file = "LICENSE"
 description = "Typst plugin helper macro library"
+repository = "https://github.com/astrale-sharp/wasm-minimal-protocol"
 
 [lib]
 proc-macro = true
