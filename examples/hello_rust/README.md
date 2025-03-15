@@ -19,19 +19,18 @@ cp ./target/wasm32-unknown-unknown/release/hello.wasm ./
 
 ## Compile with wasi
 
-If you want to build with WASI, use the `wasm32-wasi` target:
+If you want to build with WASI, use the `wasm32-wasip1` target:
 
 ```sh
-rustup target add wasm32-wasi
-cargo build --release --target wasm32-wasi
+rustup target add wasm32-wasip1
+cargo build --release --target wasm32-wasip1
+cp ./target/wasm32-wasip1/release/hello.wasm ./
 ```
 
 Then, stub the resulting binary:
 
 ```sh
-pushd ../../wasi-stub
-cargo run -- ../examples/hello_rust/target/wasm32-wasi/release/hello.wasm -o ../examples/hello_rust/hello-wasi.wasm
-popd
+cargo run --manifest-path ../../crates/wasi-stub/Cargo.toml hello.wasm -o hello.wasm
 ```
 
 ## Build with typst
