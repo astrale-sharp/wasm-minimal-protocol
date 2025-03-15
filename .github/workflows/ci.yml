@@ -24,6 +24,16 @@ jobs:
       - uses: typst-community/setup-typst@v4
         with:
           typst-version: 0.13.1
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: emcc --no-entry -s ERROR_ON_UNDEFINED_SYMBOLS=0 -o hello.wasm hello.c
       - run: cargo run --manifest-path ../../crates/wasi-stub/Cargo.toml hello.wasm -o hello.wasm
       - run: typst compile hello.typ
@@ -40,6 +50,16 @@ jobs:
       - uses: typst-community/setup-typst@v4
         with:
           typst-version: 0.13.1
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: >
           cargo build --target wasm32-unknown-unknown &&
           cp ./target/wasm32-unknown-unknown/debug/hello.wasm .
@@ -62,6 +82,16 @@ jobs:
       - uses: typst-community/setup-typst@v4
         with:
           typst-version: 0.13.1
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: >
           zig build-exe hello.zig -target wasm32-freestanding -fno-entry \
             --export=hello \
