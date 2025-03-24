@@ -8,6 +8,10 @@
   assert.eq(str(p.returns_ok()), "This is an `Ok`")
   // p.will_panic()  // Fails compilation
   // p.returns_err() // Fails compilation with an error message
+
+  let encoded = cbor.encode((x: 1, y: 2.0))
+  let decoded = cbor(p.complex_data(encoded))
+  assert.eq(decoded, 3.0)
 }
 
 #{
