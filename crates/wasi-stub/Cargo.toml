@@ -3,6 +3,7 @@ name = "wasi-stub"
 edition = "2021"
 version = "0.2.0"
 authors = ["Arnaud Golfouse <arnaud.golfouse@laposte.net>"]
+repository = "https://github.com/astrale-sharp/wasm-minimal-protocol"
 
 [dependencies]
 anyhow = "1.0"
