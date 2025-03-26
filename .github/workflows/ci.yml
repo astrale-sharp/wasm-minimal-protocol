@@ -4,7 +4,7 @@ env:
 
 on: [push, pull_request]
 jobs:
-  hello_c:
+  checks:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,61 +21,8 @@ jobs:
           version: ${{env.EM_VERSION}}
           actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
       - uses: dtolnay/rust-toolchain@stable
-      - uses: typst-community/setup-typst@v4
-        with:
-          typst-version: 0.13.1
-      - name: Cache Rust
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: emcc --no-entry -s ERROR_ON_UNDEFINED_SYMBOLS=0 -o hello.wasm hello.c
-      - run: cargo run --manifest-path ../../crates/wasi-stub/Cargo.toml hello.wasm -o hello.wasm
-      - run: typst compile hello.typ
-  hello_rust:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: examples/hello_rust
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown, wasm32-wasip1
-      - uses: typst-community/setup-typst@v4
-        with:
-          typst-version: 0.13.1
-      - name: Cache Rust
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: >
-          cargo build --target wasm32-unknown-unknown &&
-          cp ./target/wasm32-unknown-unknown/debug/hello.wasm .
-      - run: typst compile hello.typ
-      - run: >
-          cargo build --target wasm32-wasip1 &&
-          cp ./target/wasm32-wasip1/debug/hello.wasm .
-      - run: cargo run --manifest-path ../../crates/wasi-stub/Cargo.toml hello.wasm -o hello.wasm
-      - run: typst compile hello.typ
-  hello_zig:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: examples/hello_zig
-    steps:
-      - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1
         with:
           version: 0.13.0
@@ -86,30 +33,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
+            ~/.cargo
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: >
-          zig build-exe hello.zig -target wasm32-freestanding -fno-entry \
-            --export=hello \
-            --export=double_it \
-            --export=concatenate \
-            --export=shuffle \
-            --export=returns_ok \
-            --export=returns_err \
-            --export=will_panic
-      - run: typst compile hello.typ
-      - run: >
-          zig build-exe hello.zig -target wasm32-wasi -fno-entry \
-            --export=hello \
-            --export=double_it \
-            --export=concatenate \
-            --export=shuffle \
-            --export=returns_ok \
-            --export=returns_err \
-            --export=will_panic
-      - run: cargo run --manifest-path ../../crates/wasi-stub/Cargo.toml hello.wasm -o hello.wasm
-      - run: typst compile hello.typ
+      - run: .githooks/pre-push
