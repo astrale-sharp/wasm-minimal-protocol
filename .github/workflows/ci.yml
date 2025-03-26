@@ -6,9 +6,6 @@ on: [push, pull_request]
 jobs:
   checks:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: examples/hello_c
     steps:
       - uses: actions/checkout@v4
       - name: Setup cache
