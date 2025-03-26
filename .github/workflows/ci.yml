@@ -36,4 +36,4 @@ jobs:
             ~/.cargo
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: .githooks/pre-push
+      - run: ./.githooks/pre-push
