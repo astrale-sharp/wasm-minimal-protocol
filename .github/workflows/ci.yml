@@ -1,8 +1,13 @@
 env:
   EM_VERSION: 1.39.18
-  EM_CACHE_FOLDER: 'emsdk-cache'
+  EM_CACHE_FOLDER: "emsdk-cache"
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
 jobs:
   checks:
     runs-on: ubuntu-latest
