@@ -1,14 +1,17 @@
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
-fn wasi_stub(path: String) {
-    let path = PathBuf::from(path).canonicalize().unwrap();
+fn wasi_stub(path: PathBuf) {
+    let path = path.canonicalize().unwrap();
 
     let wasi_stub = Command::new("cargo")
         .arg("run")
         .arg(&path)
         .arg("-o")
         .arg(&path)
-        .current_dir("wasi-stub")
+        .current_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../wasi-stub"))
         .status()
         .unwrap();
     if !wasi_stub.success() {
@@ -16,7 +19,7 @@ fn wasi_stub(path: String) {
     }
 }
 
-fn typst_compile(path: &str) {
+fn typst_compile(path: &Path) {
     let typst_version = Command::new("typst").arg("--version").output().unwrap();
     if !typst_version.status.success() {
         panic!("typst --version failed");
@@ -49,7 +52,11 @@ fn typst_compile(path: &str) {
 
 #[test]
 fn test_c() {
-    let dir_path = "examples/hello_c/".to_string();
+    let dir_path = Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/hello_c"
+    ));
+
     let build_c = Command::new("emcc")
         .arg("--no-entry")
         .arg("-O3")
@@ -58,89 +65,82 @@ fn test_c() {
         .arg("-o")
         .arg("hello.wasm")
         .arg("hello.c")
-        .current_dir(&dir_path)
+        .current_dir(dir_path)
         .status()
         .unwrap();
     if !build_c.success() {
         panic!("Compiling with emcc failed");
     }
-    wasi_stub(dir_path.clone() + "hello.wasm");
-    typst_compile(&dir_path);
+    wasi_stub(dir_path.join("hello.wasm"));
+    typst_compile(dir_path);
 }
 
 #[test]
 fn test_rust() {
-    let dir_path = "examples/hello_rust/".to_string();
-    let build_rust = Command::new("cargo")
-        .arg("build")
-        .arg("--release")
-        .arg("--target")
-        .arg("wasm32-unknown-unknown")
-        .current_dir(&dir_path)
-        .status()
+    let dir_path = Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/hello_rust"
+    ));
+
+    for target in ["wasm32-unknown-unknown", "wasm32-wasip1"] {
+        let build_rust = Command::new("cargo")
+            .arg("build")
+            .arg("--release")
+            .arg("--target")
+            .arg(target)
+            .current_dir(dir_path)
+            .status()
+            .unwrap();
+        if !build_rust.success() {
+            panic!("Compiling with cargo failed");
+        }
+        std::fs::copy(
+            dir_path
+                .join("target")
+                .join(target)
+                .join("release/hello.wasm"),
+            dir_path.join("hello.wasm"),
+        )
         .unwrap();
-    if !build_rust.success() {
-        panic!("Compiling with cargo failed");
+        if target == "wasm32-wasip1" {
+            wasi_stub(dir_path.join("hello.wasm"));
+        }
+        typst_compile(dir_path);
     }
-    let build_rust_wasi = Command::new("cargo")
-        .arg("build")
-        .arg("--release")
-        .arg("--target")
-        .arg("wasm32-wasi")
-        .current_dir(&dir_path)
-        .status()
-        .unwrap();
-    if !build_rust_wasi.success() {
-        panic!("Compiling with cargo failed");
-    }
-    std::fs::copy(
-        "examples/hello_rust/target/wasm32-unknown-unknown/release/hello.wasm",
-        "examples/hello_rust/hello.wasm",
-    )
-    .unwrap();
-    std::fs::copy(
-        "examples/hello_rust/target/wasm32-wasi/release/hello.wasm",
-        "examples/hello_rust/hello-wasi.wasm",
-    )
-    .unwrap();
-    wasi_stub(dir_path.clone() + "hello-wasi.wasm");
-    typst_compile(&dir_path);
 }
 
 #[test]
 fn test_zig() {
-    let dir_path = "examples/hello_zig/".to_string();
-    let build_zig = Command::new("zig")
-        .arg("build-lib")
-        .arg("hello.zig")
-        .arg("-target")
-        .arg("wasm32-freestanding")
-        .arg("-dynamic")
-        .arg("-rdynamic")
-        .arg("-O")
-        .arg("ReleaseSmall")
-        .current_dir(&dir_path)
-        .status()
-        .unwrap();
-    if !build_zig.success() {
-        panic!("Compiling with zig failed");
+    let dir_path = Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/hello_zig"
+    ));
+
+    for target in ["wasm32-freestanding", "wasm32-wasi"] {
+        let build_zig = Command::new("zig")
+            .arg("build-exe")
+            .arg("hello.zig")
+            .arg("-target")
+            .arg(target)
+            .arg("-fno-entry")
+            .arg("-O")
+            .arg("ReleaseSmall")
+            .arg("--export=hello")
+            .arg("--export=double_it")
+            .arg("--export=concatenate")
+            .arg("--export=shuffle")
+            .arg("--export=returns_ok")
+            .arg("--export=returns_err")
+            .arg("--export=will_panic")
+            .current_dir(dir_path)
+            .status()
+            .unwrap();
+        if !build_zig.success() {
+            panic!("Compiling with zig failed");
+        }
+        if target == "wasm32-wasi" {
+            wasi_stub(dir_path.join("hello.wasm"));
+        }
+        typst_compile(dir_path);
     }
-    let build_zig_wasi = Command::new("zig")
-        .arg("build-lib")
-        .arg("hello.zig")
-        .arg("-target")
-        .arg("wasm32-wasi")
-        .arg("-dynamic")
-        .arg("-rdynamic")
-        .arg("-O")
-        .arg("ReleaseSmall")
-        .arg("-femit-bin=hello-wasi.wasm")
-        .current_dir(&dir_path)
-        .status()
-        .unwrap();
-    if !build_zig_wasi.success() {
-        panic!("Compiling with zig failed");
-    }
-    wasi_stub(dir_path.clone() + "hello-wasi.wasm");
-    typst_compile(&dir_path);
 }

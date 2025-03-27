@@ -12,10 +12,10 @@ restore_cargo_lock()
 trap restore_cargo_lock EXIT
 
 cargo +nightly update -Zdirect-minimal-versions -p wasm-minimal-protocol --aggressive
-cargo test --no-run
+cargo test --workspace --no-run
 
 restore_cargo_lock
-cargo fmt --check
-cargo clippy --tests -- --D warnings
+cargo fmt --all --check
+cargo clippy --all-targets -- --D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --document-private-items --no-deps
 cargo test
