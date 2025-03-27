@@ -2,3 +2,7 @@
 resolver = "2"
 members = ["crates/macro", "crates/wasi-stub"]
 default-members = ["crates/macro", "crates/wasi-stub"]
+
+[profile.release]
+lto = true
+panic = "abort"

@@ -1,0 +1,73 @@
+name: Release `wasi-stub`
+
+on:
+  workflow_dispatch:
+    branches:
+      - master
+    inputs:
+      version:
+        description: "Version number"
+        required: true
+      body:
+        description: "Description of the release"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, suffix: "" }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, suffix: .exe }
+          - { os: macos-latest, target: x86_64-apple-darwin, suffix: "" }
+    name: build ${{ matrix.job.os }}
+    runs-on: ${{ matrix.job.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release --package wasi-stub
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasi-stub-${{ matrix.job.target }}
+          path: target/release/wasi-stub${{ matrix.job.suffix }}
+
+  release:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download linux
+        uses: actions/download-artifact@v4
+        with:
+          name: wasi-stub-x86_64-unknown-linux-musl
+          path: wasi-stub-x86_64-unknown-linux-musl
+      - name: Download windows
+        uses: actions/download-artifact@v4
+        with:
+          name: wasi-stub-x86_64-pc-windows-msvc
+          path: wasi-stub-x86_64-pc-windows-msvc
+      - name: Download macos
+        uses: actions/download-artifact@v4
+        with:
+          name: wasi-stub-x86_64-apple-darwin
+          path: wasi-stub-x86_64-apple-darwin
+      - name: Make archives
+        run: |
+          tar -cvf wasi-stub-x86_64-unknown-linux-musl.tar.gz wasi-stub-x86_64-unknown-linux-musl/wasi-stub
+          zip wasi-stub-x86_64-pc-windows-msvc.zip wasi-stub-x86_64-pc-windows-msvc/wasi-stub.exe
+          tar -cvf wasi-stub-x86_64-apple-darwin.tar.gz wasi-stub-x86_64-apple-darwin/wasi-stub
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: wasi-stub ${{ github.event.inputs.version }}
+          tag_name: wasi-stub-${{ github.event.inputs.version }}
+          body: ${{ github.event.inputs.body }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            wasi-stub-x86_64-unknown-linux-musl.tar.gz
+            wasi-stub-x86_64-pc-windows-msvc.zip
+            wasi-stub-x86_64-apple-darwin.tar.gz
