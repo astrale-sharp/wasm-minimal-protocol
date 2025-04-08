@@ -40,6 +40,8 @@ See the example for your language:
 
 If you have all the required dependencies, you may build all examples by running `cargo test`.
 
+If you want to pass structured data to Typst, check how it's done with the [rust example using cbor](examples/hello_rust/).
+
 ## wasi-stub
 
 The runtime used by typst do not allow the plugin to import any function (beside the ones used by the protocol). In particular, if your plugin is compiled for [WASI](https://wasi.dev/), it will not be able to be loaded by typst.
