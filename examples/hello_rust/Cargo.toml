@@ -7,6 +7,9 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+# Same package and version as Typst uses.
+ciborium = "0.2.1"
+serde = "1.0"
 wasm-minimal-protocol = { path = "../../crates/macro" }
 
 
