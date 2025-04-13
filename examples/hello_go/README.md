@@ -4,25 +4,28 @@ This is a bare-bone typst plugin, written in Go.
 
 ## Compile
 
-To compile this example, you need the [TinyGo compiler]. Then, run the command
+To compile this example, you need the [TinyGo compiler](https://tinygo.org/). Then, run the command:
 
 ```sh
-GOOS="wasip1" GOARCH="wasm" tinygo build -o hello.wasm
+tinygo build -target=wasm-unknown -o hello.wasm
 ```
 
-[TinyGo compiler]: https://tinygo.org/getting-started/install/
+The `-target=wasm-unknown` flag is similar to `-target wasm32-unknown-unknown` in Rust and it tells the compiler to generate a WebAssembly binary that does not depend on any specific environment.
 
+## Compile with wasip1
 
-This invocation of Tinygo builds with WASI[^1], so we need to stub WASI functions:
-
-[^1]: I personally could not get a working binary with `GOOS="js"` (i.e. wasm).
+If you want to build with WASI, use the `wasip1` target:
 
 ```sh
-pushd ../../wasi-stub
-cargo run -- ../examples/hello_go/hello.wasm -o ../examples/hello_go/hello.wasm
-popd
+GOOS=wasip1 GOARCH=wasm tinygo build -o hello.wasm
+```
+
+Then, stub the resulting binary:
+
+```sh
+cargo run --manifest-path ../../crates/wasi-stub/Cargo.toml hello.wasm -o hello.wasm
 ```
 
 ## Build with typst
 
-Simply run `typst compile hello.typ`, and observe that it works !
+Simply run `typst compile hello.typ`, and observe that it works!

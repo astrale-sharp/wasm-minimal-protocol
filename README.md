@@ -6,7 +6,7 @@ Note that plugins require typst version `0.8` or more.
 
 ## You want to write a plugin
 
-A plugin can be written in Rust, C, Zig, Go or any language than compiles to WebAssembly.
+A plugin can be written in Rust, C, Zig, Go, or any language than compiles to WebAssembly.
 
 Rust plugins can use this crate to automatically implement the protocol with a macro:
 

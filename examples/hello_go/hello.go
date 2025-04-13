@@ -26,29 +26,29 @@ func SendResultToHost(resBuf []byte) {
 
 // ===
 
-// main is required for the `wasip1` target, even if it isn't used.
 func main() {}
 
 //go:export hello
 func hello() int32 {
-	const message = "Hello from wasm!!!"
-	SendResultToHost([]byte(message))
+	const msg = "Hello from wasm!!!"
+	SendResultToHost([]byte(msg))
 	return 0
 }
 
 //go:export double_it
-func doubleIt(arg1Len int32) int32 {
-	buf := make([]byte, arg1Len*2)
+func doubleIt(argLen int32) int32 {
+	buf := make([]byte, argLen*2)
 	WriteArgsToBuffer(buf)
 
-	copy(buf[arg1Len:], buf[:arg1Len])
+	copy(buf[argLen:], buf[:argLen])
 	SendResultToHost(buf)
 	return 0
 }
 
 //go:export concatenate
 func concatenate(arg1Len, arg2Len int32) int32 {
-	buf := make([]byte, arg1Len+arg2Len+1)
+	totalLen := arg1Len + arg2Len + 1
+	buf := make([]byte, totalLen)
 	WriteArgsToBuffer(buf)
 
 	copy(buf[arg1Len+1:], buf[arg1Len:])
@@ -58,34 +58,38 @@ func concatenate(arg1Len, arg2Len int32) int32 {
 }
 
 //go:export shuffle
-func shuffle(arg1Len, arg2Len, arg3Len int) int32 {
-	argBuf := make([]byte, arg1Len+arg2Len+arg3Len)
+func shuffle(arg1Len, arg2Len, arg3Len int32) int32 {
+	totalLen := arg1Len + arg2Len + arg3Len
+	argBuf := make([]byte, totalLen)
+	WriteArgsToBuffer(argBuf)
+
 	arg1 := argBuf[:arg1Len]
 	arg2 := argBuf[arg1Len : arg1Len+arg2Len]
 	arg3 := argBuf[arg1Len+arg2Len:]
-	WriteArgsToBuffer(argBuf)
 
-	resBuf := make([]byte, 0, arg1Len+arg2Len+arg3Len+2)
+	// Pre-allocate with exact capacity needed
+	resBuf := make([]byte, 0, totalLen+2)
 	resBuf = append(resBuf, arg3...)
 	resBuf = append(resBuf, '-')
 	resBuf = append(resBuf, arg1...)
 	resBuf = append(resBuf, '-')
 	resBuf = append(resBuf, arg2...)
+
 	SendResultToHost(resBuf)
 	return 0
 }
 
 //go:export returns_ok
 func returnsOk() int32 {
-	const message = "This is an `Ok`"
-	SendResultToHost([]byte(message))
+	const msg = "This is an `Ok`"
+	SendResultToHost([]byte(msg))
 	return 0
 }
 
 //go:export returns_err
 func returnsErr() int32 {
-	const message = "This is an `Err`"
-	SendResultToHost([]byte(message))
+	const msg = "This is an `Err`"
+	SendResultToHost([]byte(msg))
 	return 1
 }
 

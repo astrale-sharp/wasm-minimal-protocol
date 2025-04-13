@@ -147,19 +147,36 @@ fn test_zig() {
 
 #[test]
 fn test_go() {
-    let dir_path = "examples/hello_go/".to_string();
+    let dir_path = Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/hello_go"
+    ));
+
+    let build_go = Command::new("tinygo")
+        .arg("build")
+        .arg("-target=wasm-unknown")
+        .arg("-o")
+        .arg("hello.wasm")
+        .current_dir(dir_path)
+        .status()
+        .unwrap();
+    if !build_go.success() {
+        panic!("Compiling with tinygo for wasm-unknown failed");
+    }
+    typst_compile(dir_path);
+
     let build_go_wasi = Command::new("tinygo")
         .arg("build")
         .arg("-o")
         .arg("hello.wasm")
         .env("GOOS", "wasip1")
         .env("GOARCH", "wasm")
-        .current_dir(&dir_path)
+        .current_dir(dir_path)
         .status()
         .unwrap();
     if !build_go_wasi.success() {
-        panic!("Compiling with tinygo failed");
+        panic!("Compiling with tinygo for wasip1 failed");
     }
-    wasi_stub(dir_path.clone() + "hello.wasm");
-    typst_compile(&dir_path);
+    wasi_stub(dir_path.join("hello.wasm"));
+    typst_compile(dir_path);
 }
