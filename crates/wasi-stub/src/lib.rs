@@ -34,7 +34,7 @@ enum ImportIndex {
 struct ToStub {
     fields_index: usize,
     span: wast::token::Span,
-    nb_results: usize,
+    results: Vec<ValType<'static>>,
     ty: TypeUse<'static, FunctionType<'static>>,
     name: Option<NameAnnotation<'static>>,
     id: Option<Id<'static>>,
@@ -68,6 +68,37 @@ fn static_name_annotation(name: Option<NameAnnotation>) -> Option<NameAnnotation
     name.map(|name| NameAnnotation {
         name: String::from(name.name).leak(),
     })
+}
+fn static_val_type(val_type: &ValType) -> ValType<'static> {
+    // FIXME: This long match dance is _only_ to make the lifetime of ty 'static. A lot of things have to go through this dance (see the `static_*` function...)
+    // Instead, we should write the new function here, in place, by replacing `field`. This is currently done in the for loop at the veryend of this function.
+    // THEN, at the end of the loop, swap every function in it's right place. No need to do more !
+    match val_type {
+        ValType::I32 => ValType::I32,
+        ValType::I64 => ValType::I64,
+        ValType::F32 => ValType::F32,
+        ValType::F64 => ValType::F64,
+        ValType::V128 => ValType::V128,
+        ValType::Ref(r) => ValType::Ref(RefType {
+            nullable: r.nullable,
+            heap: match r.heap {
+                HeapType::Func => HeapType::Func,
+                HeapType::Extern => HeapType::Extern,
+                HeapType::Any => HeapType::Any,
+                HeapType::Eq => HeapType::Eq,
+                HeapType::Struct => HeapType::Struct,
+                HeapType::Array => HeapType::Array,
+                HeapType::I31 => HeapType::I31,
+                HeapType::NoFunc => HeapType::NoFunc,
+                HeapType::NoExtern => HeapType::NoExtern,
+                HeapType::None => HeapType::None,
+                HeapType::Index(index) => HeapType::Index(match index {
+                    Index::Num(n, s) => Index::Num(n, s),
+                    Index::Id(id) => Index::Id(static_id(Some(id)).unwrap()),
+                }),
+            },
+        }),
+    }
 }
 
 pub fn stub_wasi_functions(
@@ -124,45 +155,15 @@ pub fn stub_wasi_functions(
                             .map(|(id, name, val_type)| Local {
                                 id: static_id(*id),
                                 name: static_name_annotation(*name),
-                                // FIXME: This long match dance is _only_ to make the lifetime of ty 'static. A lot of things have to go through this dance (see the `static_*` function...)
-                                // Instead, we should write the new function here, in place, by replacing `field`. This is currently done in the for loop at the veryend of this function.
-                                // THEN, at the end of the loop, swap every function in it's right place. No need to do more !
-                                ty: match val_type {
-                                    ValType::I32 => ValType::I32,
-                                    ValType::I64 => ValType::I64,
-                                    ValType::F32 => ValType::F32,
-                                    ValType::F64 => ValType::F64,
-                                    ValType::V128 => ValType::V128,
-                                    ValType::Ref(r) => ValType::Ref(RefType {
-                                        nullable: r.nullable,
-                                        heap: match r.heap {
-                                            HeapType::Func => HeapType::Func,
-                                            HeapType::Extern => HeapType::Extern,
-                                            HeapType::Any => HeapType::Any,
-                                            HeapType::Eq => HeapType::Eq,
-                                            HeapType::Struct => HeapType::Struct,
-                                            HeapType::Array => HeapType::Array,
-                                            HeapType::I31 => HeapType::I31,
-                                            HeapType::NoFunc => HeapType::NoFunc,
-                                            HeapType::NoExtern => HeapType::NoExtern,
-                                            HeapType::None => HeapType::None,
-                                            HeapType::Index(index) => {
-                                                HeapType::Index(match index {
-                                                    Index::Num(n, s) => Index::Num(n, s),
-                                                    Index::Id(id) => {
-                                                        Index::Id(static_id(Some(id)).unwrap())
-                                                    }
-                                                })
-                                            }
-                                        },
-                                    }),
-                                },
+                                ty: static_val_type(val_type),
                             })
                             .collect();
+                        let results: Vec<_> =
+                            func_typ.results.iter().map(static_val_type).collect();
                         to_stub.push(ToStub {
                             fields_index: field_idx,
                             span: i.span,
-                            nb_results: func_typ.results.len(),
+                            results,
                             ty,
                             name: i.item.name.map(|n| NameAnnotation {
                                 name: n.name.to_owned().leak(),
@@ -227,7 +228,7 @@ pub fn stub_wasi_functions(
         ToStub {
             fields_index,
             span,
-            nb_results,
+            results,
             ty,
             name,
             id,
@@ -235,14 +236,23 @@ pub fn stub_wasi_functions(
         },
     ) in to_stub.into_iter().enumerate()
     {
-        let instructions = {
-            let mut res = Vec::with_capacity(nb_results);
-            for _ in 0..nb_results {
+        let instructions: Vec<_> = results
+            .iter()
+            .map(|val_type| {
                 // Weird value, hopefully this makes it easier to track usage of these stubbed functions.
-                res.push(Instruction::I32Const(return_value as i32));
-            }
-            res
-        };
+                match val_type {
+                    ValType::I32 => Instruction::I32Const(return_value as i32),
+                    ValType::I64 => Instruction::I64Const(return_value as i64),
+                    ValType::F32 => Instruction::F32Const(wast::token::Float32 {
+                        bits: return_value as u32,
+                    }),
+                    ValType::F64 => Instruction::F64Const(wast::token::Float64 {
+                        bits: return_value as u64,
+                    }),
+                    _ => panic!("Unsupported stub return type {:?}", val_type),
+                }
+            })
+            .collect();
         let function = Func {
             span,
             id,
