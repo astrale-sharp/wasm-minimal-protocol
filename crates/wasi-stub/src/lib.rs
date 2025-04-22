@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use wast::{
     core::{
-        Expression, Func, FuncKind, FunctionType, HeapType, InlineExport, Instruction, ItemKind,
-        Local, ModuleField, ModuleKind, RefType, TypeUse, ValType, InnerTypeKind,
+        Expression, Func, FuncKind, FunctionType, HeapType, InlineExport, InnerTypeKind,
+        Instruction, ItemKind, Local, ModuleField, ModuleKind, RefType, TypeUse, ValType,
     },
     token::{Id, Index, NameAnnotation},
     Wat,
@@ -114,7 +114,11 @@ pub fn stub_wasi_functions(
                         println!("Stubbing function {}::{}", i.module, i.field);
                         let typ = &types[type_index];
                         let ty = TypeUse::new_with_index(Index::Num(type_index as u32, typ.span));
-                        let wast::core::TypeDef{kind: InnerTypeKind::Func(func_typ), ..} = &typ.def else {
+                        let wast::core::TypeDef {
+                            kind: InnerTypeKind::Func(func_typ),
+                            ..
+                        } = &typ.def
+                        else {
                             continue;
                         };
                         let id = static_id(i.item.id);
@@ -144,7 +148,9 @@ pub fn stub_wasi_functions(
                                                     }
                                                 })
                                             }
-                                            HeapType::Abstract { shared, ty } => HeapType::Abstract { shared, ty },
+                                            HeapType::Abstract { shared, ty } => {
+                                                HeapType::Abstract { shared, ty }
+                                            }
                                         },
                                     }),
                                 },
