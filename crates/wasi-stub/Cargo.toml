@@ -6,5 +6,5 @@ authors = ["Arnaud Golfouse <arnaud.golfouse@laposte.net>"]
 repository = "https://github.com/astrale-sharp/wasm-minimal-protocol"
 
 [dependencies]
-wast = "65.0"
-wasmprinter = "0.2"
+wast = "219.0"
+wasmprinter = "0.219"
