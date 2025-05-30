@@ -75,8 +75,7 @@ pub fn stub_wasi_functions(
     should_stub: ShouldStub,
     return_value: u32,
 ) -> crate::Result<Vec<u8>> {
-    let wat = wasmprinter::print_bytes(binary)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    let wat = wasmprinter::print_bytes(binary).map_err(std::io::Error::other)?;
     let parse_buffer = wast::parser::ParseBuffer::new(&wat)?;
 
     let mut wat: Wat = wast::parser::parse(&parse_buffer)?;
@@ -267,10 +266,7 @@ pub fn stub_wasi_functions(
 pub struct Error(Box<dyn std::error::Error + Send + Sync + 'static>);
 impl Error {
     pub fn message(reason: impl AsRef<str>) -> Self {
-        Self(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            reason.as_ref().to_string(),
-        )))
+        Self(Box::new(std::io::Error::other(reason.as_ref().to_string())))
     }
 }
 impl std::fmt::Debug for Error {

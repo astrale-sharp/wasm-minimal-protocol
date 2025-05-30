@@ -17,12 +17,24 @@
 //! }
 //! ```
 //!
+//! # Allowed types
+//!
+//! Allowed input types are either `&[u8]` or `&mut [u8]`.
+//!
+//! Allowed output types are
+//! - `Vec<u8>`
+//! - `Box<[u8]>`
+//! - `&[u8]`
+//! - `Result<T, E>`, where `T` is any of the above, and `E` is a type implementing
+//!   [`Display`](std::fmt::Display).
+//!
 //! # Protocol
 //!
-//! The specification of the protocol can be found in the typst documentation:
+//! The specification of the low-level protocol can be found in the typst documentation:
 //! <https://typst.app/docs/reference/foundations/plugin/#protocol>
 
 use proc_macro::TokenStream;
+use proc_macro2::{Delimiter, TokenTree};
 use quote::{format_ident, quote, ToTokens};
 use venial::*;
 
@@ -39,9 +51,6 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
         .into();
     }
     quote!(
-        // #[cfg(not(target_arch = "wasm32"))]
-        // compile_error!("Error: this protocol may only be used when compiling to wasm architectures");
-
         #[link(wasm_import_module = "typst_env")]
         extern "C" {
             #[link_name = "wasm_minimal_protocol_send_result_to_host"]
@@ -50,23 +59,41 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
             fn __write_args_to_buffer(ptr: *mut u8);
         }
 
-        trait __BytesOrResultBytes {
-            type Err;
-            fn convert(self) -> ::core::result::Result<Vec<u8>, Self::Err>;
+        trait __ToResult {
+            type Ok: ::core::convert::AsRef<[u8]>;
+            type Err: ::core::fmt::Display;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err>;
         }
-        impl __BytesOrResultBytes for Vec<u8> {
-            type Err = i32;
-            fn convert(self) -> ::core::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
+        impl __ToResult for Vec<u8> {
+            type Ok = Self;
+            type Err = ::core::convert::Infallible;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err> {
                 Ok(self)
             }
         }
-        impl<E> __BytesOrResultBytes for ::core::result::Result<Vec<u8>, E> {
+        impl __ToResult for Box<[u8]> {
+            type Ok = Self;
+            type Err = ::core::convert::Infallible;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err> {
+                Ok(self)
+            }
+        }
+        impl<'a> __ToResult for &'a [u8] {
+            type Ok = Self;
+            type Err = ::core::convert::Infallible;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err> {
+                Ok(self)
+            }
+        }
+        impl<T: ::core::convert::AsRef<[u8]>, E: ::core::fmt::Display> __ToResult for ::core::result::Result<T, E> {
+            type Ok = T;
             type Err = E;
-            fn convert(self) -> ::core::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
+            fn to_result(self) -> Self {
                 self
             }
         }
-    ).into()
+    )
+    .into()
 }
 
 /// Wrap the function to be used with the [protocol](https://typst.app/docs/reference/foundations/plugin/#protocol).
@@ -136,19 +163,16 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 let x = x.to_token_stream();
                 error = Some(venial::Error::new_at_tokens(
                     &x,
-                    format!("the {x} argument is not allowed by the protocol"),
+                    format!("the `{x}` argument is not allowed by the protocol"),
                 ));
                 None
             }
             FnParam::Typed(p) => {
-                if p.ty.tokens.len() != 2
-                    || p.ty.tokens[0].to_string() != "&"
-                    || p.ty.tokens[1].to_string() != "[u8]"
-                {
+                if !tokens_are_slice(&p.ty.tokens) {
                     let p_to_string = p.ty.to_token_stream();
                     error = Some(venial::Error::new_at_tokens(
                         &p_to_string,
-                        format!("only parameters of type &[u8] are allowed, not {p_to_string}"),
+                        format!("only parameters of type `&[u8]` or `&mut [u8]` are allowed, not {p_to_string}"),
                     ));
                     None
                 } else {
@@ -157,15 +181,16 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
             }
         })
         .collect::<Vec<_>>();
-    let p_idx = p
+    let p_len = p
         .iter()
-        .map(|name| format_ident!("__{}_idx", name))
+        .map(|name| format_ident!("__{}_len", name))
         .collect::<Vec<_>>();
 
     let mut get_unsplit_params = quote!(
-        let __total_len = #(#p_idx + )* 0;
+        let __total_len = #(#p_len + )* 0;
         let mut __unsplit_params = vec![0u8; __total_len];
         unsafe { __write_args_to_buffer(__unsplit_params.as_mut_ptr()); }
+        let __unsplit_params: &mut [u8] = &mut __unsplit_params;
     );
     let mut set_args = quote!(
         let start: usize = 0;
@@ -175,32 +200,27 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         1 => {
             let arg = p.first().unwrap();
             set_args = quote!(
-                let #arg: &[u8] = &__unsplit_params;
+                let #arg: &mut [u8] = __unsplit_params;
             )
         }
         _ => {
-            // ignore last arg, rest used to split unsplit_param
-            let args = &p;
-            let mut args_idx = p
-                .iter()
-                .map(|name| format_ident!("__{}_idx", &name))
-                .collect::<Vec<_>>();
-            args_idx.pop();
             let mut sets = vec![];
-            let mut start = quote!(0usize);
-            let mut end = quote!(0usize);
-            for (idx, arg_idx) in args_idx.iter().enumerate() {
-                end = quote!(#end + #arg_idx);
-                let arg_name = &args[idx];
-                sets.push(quote!(
-                    let #arg_name: &[u8] = &__unsplit_params[#start..#end];
-                ));
-                start = quote!(#start + #arg_idx)
+            for (idx, (arg_name, arg_len)) in p
+                .iter()
+                .zip(p.iter().map(|name| format_ident!("__{}_len", &name)))
+                .enumerate()
+            {
+                if idx == p.len() - 1 {
+                    sets.push(quote!(
+                        let #arg_name: &mut [u8] = __unsplit_params;
+                    ));
+                } else {
+                    sets.push(quote!(
+                        let (#arg_name, __unsplit_params): (&mut [u8], &mut [u8]) =
+                            __unsplit_params.split_at_mut(#arg_len);
+                    ));
+                }
             }
-            let last = args.last().unwrap();
-            sets.push(quote!(
-                let #last = &__unsplit_params[#end..];
-            ));
             set_args = quote!(
                 #(
                     #sets
@@ -218,14 +238,19 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         result.extend(quote!(
             #[export_name = #export_name]
-            #vis_marker extern "C" fn #inner_name(#(#p_idx: usize),*) -> i32 {
+            #vis_marker extern "C" fn #inner_name(#(#p_len: usize),*) -> i32 {
                 #get_unsplit_params
                 #set_args
 
-                let result = __BytesOrResultBytes::convert(#name(#(#p),*));
+                let result = #name(#(#p),*);
+                let result = __ToResult::to_result(result);
+                let err_vec: Vec<u8>;
                 let (message, code) = match result {
-                    Ok(s) => (s.into_boxed_slice(), 0),
-                    Err(err) => (err.to_string().into_bytes().into_boxed_slice(), 1),
+                    Ok(ref s) => (s.as_ref(), 0),
+                    Err(err) => {
+                        err_vec = err.to_string().into_bytes();
+                        (err_vec.as_slice(), 1)
+                    },
                 };
                 unsafe { __send_result_to_host(message.as_ptr(), message.len()); }
                 code
@@ -233,4 +258,58 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
         ))
     }
     result.into()
+}
+
+/// Check that `ty` is either `&[u8]` or `&mut [u8]`.
+fn tokens_are_slice(ty: &[TokenTree]) -> bool {
+    let is_ampersand = |t: &_| matches!(t, TokenTree::Punct(punct) if punct.as_char() == '&');
+    let is_quote = |t: &_| matches!(t, TokenTree::Punct(punct) if punct.as_char() == '\'');
+    let is_sym = |t: &_| matches!(t, TokenTree::Ident(_));
+    let is_mut = |t: &_| matches!(t, TokenTree::Ident(i) if i == "mut");
+    let is_sliceu8 = |t: &_| match t {
+        TokenTree::Group(group) => {
+            group.delimiter() == Delimiter::Bracket && {
+                let mut inner = group.stream().into_iter();
+                matches!(
+                    inner.next(),
+                    Some(proc_macro2::TokenTree::Ident(i)) if i == "u8"
+                ) && inner.next().is_none()
+            }
+        }
+        _ => false,
+    };
+    let mut iter = ty.iter();
+    let Some(amp) = iter.next() else { return false };
+    if !is_ampersand(amp) {
+        return false;
+    }
+    let Some(mut next) = iter.next() else {
+        return false;
+    };
+    if is_quote(next) {
+        // there is a lifetime
+        let Some(lft) = iter.next() else { return false };
+        if !is_sym(lft) {
+            return false;
+        }
+        match iter.next() {
+            Some(t) => next = t,
+            None => return false,
+        }
+    }
+    if is_mut(next) {
+        // the slice is mutable
+        match iter.next() {
+            Some(t) => next = t,
+            None => return false,
+        }
+    }
+    if !is_sliceu8(next) {
+        return false;
+    }
+    if iter.next().is_some() {
+        return false;
+    }
+
+    true
 }
