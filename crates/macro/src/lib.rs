@@ -17,9 +17,20 @@
 //! }
 //! ```
 //!
+//! # Allowed types
+//!
+//! Allowed input types are either `&[u8]` or `&mut [u8]`.
+//!
+//! Allowed output types are
+//! - `Vec<u8>`
+//! - `Box<[u8]>`
+//! - `&[u8]`
+//! - `Result<T, E>`, where `T` is any of the above, and `E` is a type implementing
+//!   [`Display`](std::fmt::Display).
+//!
 //! # Protocol
 //!
-//! The specification of the protocol can be found in the typst documentation:
+//! The specification of the low-level protocol can be found in the typst documentation:
 //! <https://typst.app/docs/reference/foundations/plugin/#protocol>
 
 use proc_macro::TokenStream;
@@ -48,23 +59,41 @@ pub fn initiate_protocol(stream: TokenStream) -> TokenStream {
             fn __write_args_to_buffer(ptr: *mut u8);
         }
 
-        trait __BytesOrResultBytes {
-            type Err;
-            fn convert(self) -> ::core::result::Result<Vec<u8>, Self::Err>;
+        trait __ToResult {
+            type Ok: ::core::convert::AsRef<[u8]>;
+            type Err: ::core::fmt::Display;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err>;
         }
-        impl __BytesOrResultBytes for Vec<u8> {
-            type Err = i32;
-            fn convert(self) -> ::core::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
+        impl __ToResult for Vec<u8> {
+            type Ok = Self;
+            type Err = ::core::convert::Infallible;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err> {
                 Ok(self)
             }
         }
-        impl<E> __BytesOrResultBytes for ::core::result::Result<Vec<u8>, E> {
+        impl __ToResult for Box<[u8]> {
+            type Ok = Self;
+            type Err = ::core::convert::Infallible;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err> {
+                Ok(self)
+            }
+        }
+        impl<'a> __ToResult for &'a [u8] {
+            type Ok = Self;
+            type Err = ::core::convert::Infallible;
+            fn to_result(self) -> ::core::result::Result<Self::Ok, Self::Err> {
+                Ok(self)
+            }
+        }
+        impl<T: ::core::convert::AsRef<[u8]>, E: ::core::fmt::Display> __ToResult for ::core::result::Result<T, E> {
+            type Ok = T;
             type Err = E;
-            fn convert(self) -> ::core::result::Result<Vec<u8>, <Self as __BytesOrResultBytes>::Err> {
+            fn to_result(self) -> Self {
                 self
             }
         }
-    ).into()
+    )
+    .into()
 }
 
 /// Wrap the function to be used with the [protocol](https://typst.app/docs/reference/foundations/plugin/#protocol).
@@ -213,10 +242,11 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
                 #get_unsplit_params
                 #set_args
 
-                let result = __BytesOrResultBytes::convert(#name(#(#p),*));
+                let result = #name(#(#p),*);
+                let result = __ToResult::to_result(result);
                 let err_vec: Vec<u8>;
                 let (message, code) = match result {
-                    Ok(ref s) => (s.as_slice(), 0),
+                    Ok(ref s) => (s.as_ref(), 0),
                     Err(err) => {
                         err_vec = err.to_string().into_bytes();
                         (err_vec.as_slice(), 1)
