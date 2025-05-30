@@ -54,3 +54,11 @@ pub fn complex_data(arg: &[u8]) -> Vec<u8> {
     into_writer(&sum, &mut out).unwrap();
     out
 }
+
+#[wasm_func]
+pub fn set_to_a(arg: &mut [u8]) -> Vec<u8> {
+    for c in &mut *arg {
+        *c = b'a';
+    }
+    arg.to_vec()
+}
