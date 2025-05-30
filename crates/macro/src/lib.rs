@@ -262,10 +262,11 @@ pub fn wasm_func(_: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Check that `ty` is either `&[u8]` or `&mut [u8]`.
 fn tokens_are_slice(ty: &[TokenTree]) -> bool {
-    let is_ampersand =
-        |token: &_| matches!(token, TokenTree::Punct(punct) if punct.as_char() == '&');
-    let is_mut = |token: &_| matches!(token, TokenTree::Ident(i) if i == "mut");
-    let is_sliceu8 = |token: &_| match token {
+    let is_ampersand = |t: &_| matches!(t, TokenTree::Punct(punct) if punct.as_char() == '&');
+    let is_quote = |t: &_| matches!(t, TokenTree::Punct(punct) if punct.as_char() == '\'');
+    let is_sym = |t: &_| matches!(t, TokenTree::Ident(_));
+    let is_mut = |t: &_| matches!(t, TokenTree::Ident(i) if i == "mut");
+    let is_sliceu8 = |t: &_| match t {
         TokenTree::Group(group) => {
             group.delimiter() == Delimiter::Bracket && {
                 let mut inner = group.stream().into_iter();
@@ -277,11 +278,38 @@ fn tokens_are_slice(ty: &[TokenTree]) -> bool {
         }
         _ => false,
     };
-    if ty.len() == 2 {
-        is_ampersand(&ty[0]) && is_sliceu8(&ty[1])
-    } else if ty.len() == 3 {
-        is_ampersand(&ty[0]) && is_mut(&ty[1]) && is_sliceu8(&ty[2])
-    } else {
-        false
+    let mut iter = ty.iter();
+    let Some(amp) = iter.next() else { return false };
+    if !is_ampersand(amp) {
+        return false;
     }
+    let Some(mut next) = iter.next() else {
+        return false;
+    };
+    if is_quote(next) {
+        // there is a lifetime
+        let Some(lft) = iter.next() else { return false };
+        if !is_sym(lft) {
+            return false;
+        }
+        match iter.next() {
+            Some(t) => next = t,
+            None => return false,
+        }
+    }
+    if is_mut(next) {
+        // the slice is mutable
+        match iter.next() {
+            Some(t) => next = t,
+            None => return false,
+        }
+    }
+    if !is_sliceu8(next) {
+        return false;
+    }
+    if iter.next().is_some() {
+        return false;
+    }
+
+    true
 }
