@@ -22,6 +22,18 @@ jobs:
         with:
           version: ${{env.EM_VERSION}}
           actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
+      - name: Cache TinyGo
+        uses: actions/cache@v4
+        with:
+          path: tinygo_0.37.0_amd64.deb
+          key: tinygo-0.37.0-${{ runner.os }}
+      - name: Install TinyGo
+        run: |
+          if [ ! -f tinygo_0.37.0_amd64.deb ]; then
+            wget https://github.com/tinygo-org/tinygo/releases/download/v0.37.0/tinygo_0.37.0_amd64.deb
+          fi
+          sudo dpkg -i tinygo_0.37.0_amd64.deb
+          export PATH=$PATH:/usr/local/bin
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown, wasm32-wasip1
