@@ -2,6 +2,8 @@ package main
 
 import (
 	"unsafe"
+
+	cbor "github.com/fxamacker/cbor/v2"
 )
 
 // ===
@@ -96,4 +98,43 @@ func returnsErr() int32 {
 //go:export will_panic
 func willPanic() int32 {
 	panic("Panicking, this message will not be seen...")
+}
+
+//go:export set_to_a
+func setToA(argLen int32) int32 {
+	// get input ("arg")
+	buf := make([]byte, argLen)
+	WriteArgsToBuffer(buf)
+	// send output ("aaa")
+	for i := range buf {
+		buf[i] = 'a'
+	}
+	SendResultToHost(buf)
+	return 0
+}
+
+type ComplexDataArgs struct {
+	X int32
+	Y float64
+}
+
+//go:export complex_data
+func complexData(dataLen int32) int32 {
+	// get input ({int32, float64})
+	input := make([]byte, dataLen)
+	WriteArgsToBuffer(input)
+	var data ComplexDataArgs
+	if err := cbor.Unmarshal(input, &data); err != nil {
+		SendResultToHost([]byte(err.Error()))
+		return 1
+	}
+	// send output ({float64})
+	sum := float64(data.X) + data.Y
+	output, err := cbor.Marshal(sum)
+	if err != nil {
+		SendResultToHost([]byte(err.Error()))
+		return 1
+	}
+	SendResultToHost([]byte(output))
+	return 0
 }
